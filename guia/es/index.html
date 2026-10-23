@@ -42,6 +42,8 @@
   p code,li code,td code{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:.05em .35em;font-size:.88em;overflow-wrap:anywhere}
   .wrap{max-width:1160px;margin:0 auto;padding:0 22px}
   .mut{color:var(--mut)} .amb{color:var(--amb)}
+  .versao{margin:10px 0 0;font-family:"JetBrains Mono",monospace;font-size:.85rem;color:var(--mut)}
+  .versao b{color:var(--amb)}
   .chip{display:inline-block;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--amb);font-weight:600;font-family:Sora}
   nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(12px);background:rgba(12,12,16,.78);border-bottom:1px solid var(--line)}
   body.light nav{background:rgba(246,247,249,.85)}
@@ -149,6 +151,7 @@
   <div class="wrap">
     <div>
       <span class="chip">Grave · eMudhra + PHP2Shell · octubre de 2026</span>
+      <p class="versao">Guía <b>v<span data-v="versao">1.1.1</span></b> · actualizada el <span data-v="data">23/10/2026</span></p>
       <h1>Actualiza y <span class="amb">audita</span> tus sistemas hoy</h1>
       <p class="lead">El navegador ya te protege. Tu servidor, tu Python, tu Node, tus contenedores y tu n8n quizás no. Aquí está cómo probarlo de verdad y cómo corregir cada capa.</p>
       <div class="cta">
@@ -766,7 +769,7 @@ php_admin_flag[fatal_error_backtraces] = off</pre>
 <footer>
   <div class="wrap">
     <div class="pill">bash</div><div class="pill">curl · node · python</div><div class="pill">docker</div><div class="pill">ssh</div>
-    <p style="margin-top:18px">auditoria-seguranca · guía abierta y gratuita, versión 1.1.0, actualizada el 23/10/2026 ·
+    <p style="margin-top:18px">auditoria-seguranca · guía abierta y gratuita, versión <span data-v="versao">1.1.1</span>, actualizada el <span data-v="data">23/10/2026</span> ·
       <a href="https://github.com/inematds/auditoria-seguranca">inematds/auditoria-seguranca</a> ·
       <a href="https://inema.club">INEMA.CLUB</a></p>
   </div>

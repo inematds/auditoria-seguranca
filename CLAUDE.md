@@ -4,7 +4,7 @@ Kit/guia de segurança do INEMA (23/10/2026): como atualizar cada camada, como a
 
 - Repo: `inematds/auditoria-seguranca` (público). Commits com autor `inematds <inematds@gmail.com>`.
 - Guia: `guia/index.html` (PT, fonte) + `guia/en/` + `guia/es/`; GitHub Pages por Actions (`.github/workflows/pages.yml`). Push de mudança no workflow: por SSH (`git push git@github.com:inematds/auditoria-seguranca.git main`).
-- Versão: `VERSAO=` no `audita.sh` + rodapé do guia + README + CHANGELOG.md, sempre juntos.
+- Versão: arquivo `VERSION` é a fonte; `python3 ferramentas/versao.py X.Y.Z` atualiza audita.sh, capa/rodapé do guia (`data-v`) e README. CHANGELOG.md à mão.
 - `audita.sh` é **só leitura**: nunca instalar, alterar ou gravar nada nas máquinas auditadas. Três estados (EXPOSTO / protegido / SEM TESTE); erro de rede nunca conta como protegido. Guardar `$?` numa variável ANTES de qualquer `echo`.
 - Nada de IP, hostname ou nome de cliente no repo (caso real anonimizado). Lista de servidores (`servidores.txt`) fica fora do git.
 - Fatos só de fontes oficiais (php.net, Mozilla, Google, emudhra.we-have-a-problem.com, SOCRadar). Não citar vídeos de terceiros.

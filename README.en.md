@@ -4,6 +4,8 @@
 
 **🇧🇷 [Português](README.md) · 🇺🇸 [English](README.en.md) · 🇪🇸 [Español](README.es.md)**
 
+**Guide v1.1.1 · updated on 10/23/2026** <!-- versao: ferramentas/versao.py -->
+
 ## What it is
 
 This is a security guide for anyone running a server, website, automation, or AI agent. In October 2026, two serious pieces of news arrived together: the secret keys of 8 certificates from the eMudhra certificate authority leaked (one of them was literally number 4), and a flaw in PHP, called PHP2Shell, allows sites to be broken into without a password. The guide shows how to test whether each tool is still exposed, using a script that only reads and changes nothing, and how to update each layer. All you need is a terminal on the machine you want to check.
@@ -36,7 +38,7 @@ The browser is already protected. Old curl, Python (certifi), Node, Deno, Bun, J
 >
 > **After updating:** a lot of what was running can become incompatible with the new version (we've seen an unpinned dependency break an app, a venv resync and undo the fix, a proxy with an old address returning 502). Test and validate: the service came up, responds, does what it used to do, and the data is there (same counts). Only call it done when it's ok **and live**.
 
-## The `audita.sh` script (read-only) — version 1.1.0
+## The `audita.sh` script (read-only)
 
 It tests the **real connection** (not just a certificate list) with curl, wget, every Node, Deno, and Bun on disk (including embedded ones), the system Python, every venv and conda environment with its own certifi, and every running Docker container. It also checks the Java list (`cacerts`, via `keytool`), the PHP version on the server and in containers (PHP2Shell), and the processes that need to be restarted. At the end, it groups what it found by type with the suggested fix.
 

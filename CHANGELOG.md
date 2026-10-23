@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 1.1.1 — 23/10/2026
+
+- Versão do guia visível na capa (PT/EN/ES) e no topo dos README: "Guia v1.1.1 · atualizado em 23/10/2026".
+- Versão num lugar só: arquivo `VERSION`; `python3 ferramentas/versao.py X.Y.Z [dd/mm/aaaa]` atualiza o `audita.sh`, a capa e o rodapé do guia e os README (sem argumento, só confere).
+- Banners (`banner*.jpg`, PT/EN/ES, inclusive os "grade"): o "4" (a chave que era o número 4) em vermelho, para contrastar; o resto da arte igual.
+
 ## 1.1.0 — 23/10/2026
 
 Lições da correção de uma máquina de desenvolvimento (134 EXPOSTO → quase zero).

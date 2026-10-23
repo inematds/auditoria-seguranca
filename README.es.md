@@ -4,6 +4,8 @@
 
 **🇧🇷 [Português](README.md) · 🇺🇸 [English](README.en.md) · 🇪🇸 [Español](README.es.md)**
 
+**Guía v1.1.1 · actualizada el 23/10/2026** <!-- versao: ferramentas/versao.py -->
+
 ## Qué es
 
 Esta es una guía de seguridad para quien tiene un servidor, un sitio, una automatización o un agente de IA en funcionamiento. En octubre de 2026 llegaron juntas dos noticias graves: se filtraron las claves secretas de 8 certificados de la certificadora eMudhra (una de ellas era literalmente el número 4), y una falla en PHP, llamada PHP2Shell, permite invadir sitios sin contraseña. La guía muestra cómo comprobar si cada herramienta sigue expuesta, con un script que solo lee y no cambia nada, y cómo actualizar cada capa. Solo necesitas una terminal en la máquina que quieres revisar.
@@ -36,7 +38,7 @@ El navegador ya está protegido. curl antiguo, Python (certifi), Node, Deno, Bun
 >
 > **Después de actualizar:** muchas cosas que funcionaban pueden volverse incompatibles con la versión nueva (vimos una dependencia sin versión fija romper una app, un venv resincronizarse y deshacer la corrección, un proxy con dirección antigua dando 502). Prueba y valida: el servicio arrancó, responde, hace lo que hacía y los datos están ahí (mismos conteos). Da por terminado solo cuando esté ok **y en línea**.
 
-## El script `audita.sh` (solo lectura) — versión 1.1.0
+## El script `audita.sh` (solo lectura)
 
 Prueba la **conexión real** (no solo lista certificados) con curl, wget, cada Node, Deno y Bun del disco (incluidos los embebidos), el Python del sistema, cada venv y entorno conda con su certifi y cada contenedor Docker en ejecución. También revisa la lista de Java (`cacerts`, con `keytool`), la versión de PHP en el servidor y en los contenedores (PHP2Shell) y los procesos que necesitan reiniciarse. Al final, agrupa lo que encontró por tipo con la corrección sugerida.
 

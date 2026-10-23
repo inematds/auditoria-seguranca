@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# audita.sh 1.1.0 — auditoria SÓ LEITURA da confiança em certificados (caso eMudhra, out/2026) + versão do PHP (PHP2Shell).
+# audita.sh 1.1.1 — auditoria SÓ LEITURA da confiança em certificados (caso eMudhra, out/2026) + versão do PHP (PHP2Shell).
 #
 # Não lista certificados: testa a CONEXÃO REAL contra dois sites de teste assinados pelas chaves
 # comprometidas. Se a ferramenta conecta, ela ainda confia na cadeia ruim.
@@ -32,7 +32,7 @@
 # Saída: 0 = tudo zerado; 1 = há EXPOSTO; 2 = há SEM TESTE; 3 = só falta REINICIE/VERIFIQUE.
 set -uo pipefail
 
-VERSAO=1.1.0
+VERSAO=1.1.1
 CERTIFI_MIN=2026.10.19
 RAPIDO=0; DOCKER=1; COMANDOS=0; GO=0; PHPOK=0; ALVOS=(); SSH_OPTS=()
 while [ $# -gt 0 ]; do case "$1" in
