@@ -6,7 +6,7 @@
 
 ## Qué es
 
-Esta es una guía de seguridad para quien tiene un servidor, un sitio, una automatización o un agente de IA en funcionamiento. En octubre de 2026 llegaron juntas dos noticias graves: se filtraron las claves secretas de 8 certificados de la certificadora eMudhra (una de ellas era literalmente la número 4), y una falla en PHP, llamada PHP2Shell, permite invadir sitios sin contraseña. La guía muestra cómo probar si cada herramienta sigue expuesta, con un script que solo lee y no cambia nada, y cómo actualizar cada capa. Solo necesitas una terminal en la máquina que quieres revisar.
+Esta es una guía de seguridad para quien tiene un servidor, un sitio web, una automatización o un agente de IA en funcionamiento. En octubre de 2026 llegaron juntas dos noticias graves: se filtraron las claves secretas de 8 certificados de la certificadora eMudhra (una de ellas era literalmente la número 4), y una falla en PHP, llamada PHP2Shell, permite invadir sitios sin contraseña. La guía muestra cómo probar si cada herramienta sigue expuesta, con un script que solo lee y no cambia nada, y cómo actualizar cada capa. Solo necesitas una terminal en la máquina que quieres revisar.
 
 ## 📖 Guía de uso
 
@@ -17,16 +17,16 @@ Guía completa (qué pasó, cómo auditar, cómo actualizar, caso real, PHP2Shel
 ```bash
 curl https://dv-g3b-emudhra.we-have-a-problem.com/
 curl https://dv-g3b-aaa-emudhra.we-have-a-problem.com/
-# "SSL certificate problem" = protegido · mostró la página = EXPOSTO (expuesto)
+# "SSL certificate problem" = protegido · mostró la página = EXPOSTO (EXPUESTO)
 ```
 
-El navegador ya está protegido. curl antiguo, Python (certifi), Node, Deno, Bun, Java, Go, Docker, n8n y agentes de IA tienen su propia lista de certificados (o siguen la del sistema/contenedor) y necesitan una corrección propia.
+El navegador ya está protegido. curl antiguo, Python (certifi), Node, Deno, Bun, Java, Go, Docker, n8n y agentes de IA tienen su propia lista de certificados (o siguen la del sistema/contenedor) y necesitan su propia corrección.
 
 ## El script `audita.sh` (solo lectura) — versión 1.1.0
 
-Prueba la **conexión real** (no solo la lista de certificados) con curl, wget, cada Node, Deno y Bun del disco (incluidos los embebidos), el Python del sistema, cada venv y entorno conda con su certifi y cada contenedor Docker en ejecución. También revisa la lista de Java (`cacerts`, mediante `keytool`), la versión de PHP en el servidor y en los contenedores (PHP2Shell) y los procesos que necesitan reiniciarse. Al final, agrupa lo que encontró por tipo con la corrección sugerida.
+Prueba la **conexión real** (no solo la lista de certificados) con curl, wget, cada Node, Deno y Bun del disco (incluidos los embebidos), el Python del sistema, cada venv y entorno conda con su propio certifi y cada contenedor Docker en ejecución. También revisa la lista de Java (`cacerts`, mediante `keytool`), la versión de PHP en el servidor y en los contenedores (PHP2Shell) y los procesos que necesitan reiniciarse. Al final, agrupa lo que encontró por tipo con la corrección sugerida.
 
-Estados: `EXPOSTO` (expuesto; conectó), `protegido` (error de certificado), `SEM TESTE` (sin prueba; red/DNS/timeout — no cuenta como protegido), `VERIFIQUE` (verifica; PHP de distribución por debajo de la versión corregida: revisa el backport) y `REINICIE` (reinicia; proceso ejecutándose con el programa o la lista antigua).
+Estados: `EXPOSTO` (EXPUESTO: conectó), `protegido` (protegido: error de certificado), `SEM TESTE` (SIN PRUEBA: red/DNS/timeout — no cuenta como protegido), `VERIFIQUE` (VERIFICA: PHP de distribución por debajo de la versión corregida; confirma el backport) y `REINICIE` (REINICIA: proceso ejecutándose con el programa o la lista antigua).
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/inematds/auditoria-seguranca/main/audita.sh
@@ -53,7 +53,7 @@ Salida: `0` nada expuesto · `1` hay EXPOSTO · `2` hay una prueba que no se eje
 | Python | `certifi 2026.10.19` · `pip 26.2.2` · `uv 0.13.4` |
 | Node | `22.23.4` · `24.22.1` · `26.12.1` (Node 20 sin corrección) |
 | Go | `1.27.3` · `1.26.10` + recompilar (en Linux sigue la lista del sistema) |
-| Java | `sudo update-ca-certificates -f` (rehace el `cacerts`) o JDK nuevo |
+| Java | quitar las dos raíces del `cacerts` con `keytool -delete` (`update-ca-certificates -f` solo no las quita) o un JDK nuevo |
 | Deno · Bun | rechazaron en nuestra prueba: `2.9.8` · `1.4.4` |
 | Firefox / NSS | `158.0.1` · `3.131.1` |
 | Electron | `44.9.1` · `43.8.1` · `42.11.16` |
@@ -61,7 +61,7 @@ Salida: `0` nada expuesto · `1` hay EXPOSTO · `2` hay una prueba que no se eje
 
 ## PHP2Shell
 
-`CVE-2026-109618` y `CVE-2026-109619`, ejecución remota sin inicio de sesión. Corregido en **PHP 8.5.12 · 8.4.27 · 8.3.36 · 8.2.35**. Verificador: [openai/php2shell-checker](https://github.com/openai/php2shell-checker). Detalles, mitigaciones temporales y señales de intrusión en la guía.
+`CVE-2026-109618` y `CVE-2026-109619`, ejecución remota sin login. Corregido en **PHP 8.5.12 · 8.4.27 · 8.3.36 · 8.2.35**. Verificador: [openai/php2shell-checker](https://github.com/openai/php2shell-checker). Detalles, mitigaciones temporales y señales de intrusión en la guía.
 
 ## El proceso, de principio a fin
 
@@ -70,13 +70,13 @@ Salida: `0` nada expuesto · `1` hay EXPOSTO · `2` hay una prueba que no se eje
 | 1 | Prueba rápida con curl en las dos cadenas | `curl https://dv-g3b-emudhra.we-have-a-problem.com/` | 🧠 tú |
 | 2 | Auditoría completa de la máquina, con la lista de correcciones | `./audita.sh --comandos` | ⚙️ script |
 | 3 | Auditoría de los servidores | `./audita.sh --hosts servidores.txt` | ⚙️ script |
-| 4 | Actualizar el sistema (y el `cacerts` de Java) | `sudo apt install --only-upgrade ca-certificates` · `sudo update-ca-certificates -f` | 🧠 tú |
+| 4 | Actualizar el sistema (y el `cacerts` de Java) | `sudo apt install --only-upgrade ca-certificates` · `sudo keytool -delete -alias … -keystore /etc/ssl/certs/java/cacerts` | 🧠 tú |
 | 5 | Actualizar el certifi de cada venv / conda | `<venv>/bin/python -m pip install -U certifi` · `uv pip install --python <venv>/bin/python -U certifi` | 🧠 tú |
 | 6 | Cambiar Node (20 → 22/24), actualizar Deno y Bun | `nvm install 22` · `sudo apt install --only-upgrade nodejs` · `deno upgrade` · `bun upgrade` | 🧠 tú |
 | 7 | Contenedores por grupo: A descargar y recrear · B capa por encima · C subir la versión / Supabase | `docker compose up -d --pull always <svc>` · `FROM <img>:pre-emudhra` · `supabase stop && supabase start` | 🧠 tú |
 | 8 | Encontrar y reiniciar servicios (fuera de job/upload/live) | sección `processos a reiniciar` del script · `systemctl restart …` · `pm2 restart all` | 🧠 tú |
 | 9 | Auditar de nuevo hasta dejar en cero | `./audita.sh` → `0 EXPOSTO · 0 SEM TESTE` | ⚙️ script |
-| 10 | PHP: probar, actualizar, reiniciar workers (servidor y contenedores) | `node phpcheck.js https://tusitio` · `apt install --only-upgrade 'php*'` | 🧠 tú |
+| 10 | PHP: probar, actualizar, reiniciar workers (servidor y contenedores) | `node phpcheck.js https://tusitio` · `sudo apt install --only-upgrade $(dpkg -l 'php*' \| awk '/^ii/{print $2}')` | 🧠 tú |
 | 11 | Rutina mensual | checklist de la sección Rutina de la guía | 🧠 tú |
 
 El historial de versiones está en el [CHANGELOG.md](CHANGELOG.md).

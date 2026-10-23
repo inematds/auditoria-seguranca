@@ -53,7 +53,7 @@ Saída: `0` nada exposto · `1` há EXPOSTO · `2` há teste que não rodou. O s
 | Python | `certifi 2026.10.19` · `pip 26.2.2` · `uv 0.13.4` |
 | Node | `22.23.4` · `24.22.1` · `26.12.1` (Node 20 sem correção) |
 | Go | `1.27.3` · `1.26.10` + recompilar (no Linux segue a lista do sistema) |
-| Java | `sudo update-ca-certificates -f` (refaz o `cacerts`) ou JDK novo |
+| Java | tirar as duas raízes do `cacerts` com `keytool -delete` (o `update-ca-certificates -f` sozinho não tira) ou JDK novo |
 | Deno · Bun | recusaram no nosso teste: `2.9.8` · `1.4.4` |
 | Firefox / NSS | `158.0.1` · `3.131.1` |
 | Electron | `44.9.1` · `43.8.1` · `42.11.16` |
@@ -70,13 +70,13 @@ Saída: `0` nada exposto · `1` há EXPOSTO · `2` há teste que não rodou. O s
 | 1 | Teste rápido com curl nas duas cadeias | `curl https://dv-g3b-emudhra.we-have-a-problem.com/` | 🧠 você |
 | 2 | Auditoria completa da máquina, com a lista de correções | `./audita.sh --comandos` | ⚙️ script |
 | 3 | Auditoria dos servidores | `./audita.sh --hosts servidores.txt` | ⚙️ script |
-| 4 | Atualizar o sistema (e o `cacerts` do Java) | `sudo apt install --only-upgrade ca-certificates` · `sudo update-ca-certificates -f` | 🧠 você |
+| 4 | Atualizar o sistema (e o `cacerts` do Java) | `sudo apt install --only-upgrade ca-certificates` · `sudo keytool -delete -alias … -keystore /etc/ssl/certs/java/cacerts` | 🧠 você |
 | 5 | Atualizar o certifi de cada venv / conda | `<venv>/bin/python -m pip install -U certifi` · `uv pip install --python <venv>/bin/python -U certifi` | 🧠 você |
 | 6 | Trocar o Node (20 → 22/24), atualizar Deno e Bun | `nvm install 22` · `sudo apt install --only-upgrade nodejs` · `deno upgrade` · `bun upgrade` | 🧠 você |
 | 7 | Containers por grupo: A puxar e recriar · B camada por cima · C subir a versão / Supabase | `docker compose up -d --pull always <svc>` · `FROM <img>:pre-emudhra` · `supabase stop && supabase start` | 🧠 você |
 | 8 | Achar e reiniciar serviços (fora de job/upload/live) | seção `processos a reiniciar` do script · `systemctl restart …` · `pm2 restart all` | 🧠 você |
 | 9 | Auditar de novo até zerar | `./audita.sh` → `0 EXPOSTO · 0 SEM TESTE` | ⚙️ script |
-| 10 | PHP: testar, atualizar, reiniciar workers (servidor e containers) | `node phpcheck.js https://seusite` · `apt install --only-upgrade 'php*'` | 🧠 você |
+| 10 | PHP: testar, atualizar, reiniciar workers (servidor e containers) | `node phpcheck.js https://seusite` · `sudo apt install --only-upgrade $(dpkg -l 'php*' \| awk '/^ii/{print $2}')` | 🧠 você |
 | 11 | Rotina mensal | checklist da seção Rotina do guia | 🧠 você |
 
 O histórico de versões está no [CHANGELOG.md](CHANGELOG.md).

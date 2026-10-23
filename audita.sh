@@ -341,7 +341,7 @@ if [ ${#JKS[@]} -gt 0 ]; then
   for j in "${JKS[@]}"; do ks=${j%%|*}; kt=${j#*|}
     java_lista "$ks" "$kt" "java $(curto "$ks")"
     if [ $ULT = 0 ]; then
-      if [ "$ks" = /etc/ssl/certs/java/cacerts ]; then achado java "$ks" "sudo update-ca-certificates -f   # regenera o keystore do ca-certificates-java"
+      if [ "$ks" = /etc/ssl/certs/java/cacerts ]; then achado java "$ks" "sudo cp -a $ks $ks.bak && for a in debian:emsign_ecc_root_ca_-_g3.pem debian:comodo_aaa_services_root.pem; do sudo keytool -delete -alias \$a -keystore $ks -storepass changeit; done   # update-ca-certificates -f sozinho não tira as raízes; backup em .bak"
       else achado java "$(curto "$ks")" "atualize o JDK dono deste cacerts (ele tem lista própria)"; fi
     fi
   done
@@ -351,10 +351,11 @@ fi
 for p in $(command -v php 2>/dev/null) /usr/sbin/php-fpm* /usr/bin/php[0-9]*; do
   [ -x "$p" ] && [ -f "$p" ] && echo "$(readlink -f "$p") $p"
 done | awk '!s[$1]++{print $2}' > "$TMPD/php.lst"
-if [ -s "$TMPD/php.lst" ]; then
+if [ ! -s "$TMPD/php.lst" ]; then echo "-- PHP2Shell: php não encontrado neste servidor (containers: veja abaixo)"
+else
   echo "-- PHP2Shell (corrigido: 8.5.12 · 8.4.27 · 8.3.36 · 8.2.35)"
   while read -r p; do php_ver "$p" "$(basename "$p")"
-    [ $ULT = 0 ] && achado php "$p" "sudo apt update && sudo apt install --only-upgrade 'php*'   # depois reinicie php-fpm/apache2"
+    [ $ULT = 0 ] && achado php "$p" "sudo apt update && sudo apt install --only-upgrade \$(dpkg -l 'php*' | awk '/^ii/{print \$2}')   # depois reinicie php-fpm/apache2"
     [ $ULT = 4 ] && achado php-verificar "$p" "apt changelog do pacote php: procure CVE-2026-109618"
   done < "$TMPD/php.lst"
 fi
@@ -415,6 +416,7 @@ if [ $DOCKER = 1 ] && command -v docker >/dev/null 2>&1 && docker ps >/dev/null 
     out=$(cat "$TMPD/c$i.out" 2>/dev/null); r=$(cat "$TMPD/c$i.rc" 2>/dev/null || echo 1)
     if echo "$out" | grep -q 'executable file not found'; then echo "   (sem shell no container — imagem mínima; teste a imagem de outra forma)"
     elif [ -n "$out" ]; then echo "$out" | sed '/^$/d;s/^/   /'
+      echo "$out" | grep -q '^VERIFIQUE.* PHP ' && achado php-verificar "container $c" "docker exec $c php -v; confira no changelog do pacote se tem a correção do CVE-2026-109618"
       e=$(echo "$out" | grep -c '^EXPOSTO'); N_EXP=$((N_EXP + e)); N_SEM=$((N_SEM + $(echo "$out" | grep -c '^SEM TESTE'))); N_VER=$((N_VER + $(echo "$out" | grep -c '^VERIFIQUE')))
       if [ "$e" -gt 0 ]; then
         if echo "$out" | grep '^EXPOSTO' | grep -q ' PHP '; then achado php "container $c" "atualize a imagem/tag do PHP (ou a do app) para PHP corrigido e recrie"; fi
@@ -427,7 +429,14 @@ fi
 
 # ---------------------------------------------------------------------------------------------
 # Quem reiniciar: processo já em execução não relê a lista. Só lista; não reinicia nada.
-unidade(){ u=$(sed -n 's|.*/\([^/]*\.service\).*|\1|p' "/proc/$1/cgroup" 2>/dev/null | tail -1); echo "${u:-—}"; }
+# unidade do processo: "sistema:<unit>", "usuario:<unit>" ou "processo" (sessão, tmux, terminal: reinicie só o processo,
+# nunca o user@NNNN.service, que derruba a sessão inteira do usuário)
+unidade(){ cg=$(tail -1 "/proc/$1/cgroup" 2>/dev/null); cg=${cg##*::}
+  case "$cg" in
+    /system.slice/*.service*) u=${cg#/system.slice/}; echo "sistema:${u%%/*}";;
+    */user@*.service/*) u=${cg##*user@*.service/}; u=$(echo "$u" | tr '/' '\n' | grep '\.service$' | tail -1)
+      if [ -n "$u" ]; then echo "usuario:$u"; else echo "processo"; fi;;
+    *) echo "processo";; esac; }
 REI=()
 agora=$(date +%s)
 while read -r pid et args; do
@@ -449,13 +458,21 @@ done < <(ps -eo pid=,etimes=,args= 2>/dev/null)
 if [ ${#REI[@]} -gt 0 ]; then
   echo "-- processos a reiniciar (não reinicie no meio de job, upload ou live; escolha a hora)"
   for r in "${REI[@]}"; do IFS='|' read -r pid un cmd mot <<< "$r"
-    printf 'REINICIE   pid %-8s %-30s %s\n           %s\n' "$pid" "$un" "$cmd" "$mot"; N_REI=$((N_REI+1)); done
+    case "$un" in
+      sistema:*) rot="${un#sistema:} (sistema)"; fx="sudo systemctl restart ${un#sistema:}";;
+      usuario:*) rot="${un#usuario:} (--user)"; fx="systemctl --user restart ${un#usuario:}";;
+      *) rot="processo avulso"; fx="reinicie o programa do pid $pid ($cmd) pelo jeito que você o iniciou (terminal, tmux, pm2) — não reinicie a sessão";;
+    esac
+    case "$cmd" in *"PM2 v"*|*"God Daemon"*) fx="pm2 update   # reinicia o daemon do pm2 e os apps dele";; esac
+    printf 'REINICIE   pid %-8s %-34s %s\n           %s\n' "$pid" "$rot" "$cmd" "$mot"; N_REI=$((N_REI+1))
+    achado reiniciar "$rot" "$fx"
+  done
 fi
 
 # ---------------------------------------------------------------------------------------------
 echo "-- resumo $(hostname): $N_EXP EXPOSTO · $N_SEM SEM TESTE · $N_VER VERIFIQUE · $N_REI REINICIE"
 if [ ${#ACH[@]} -gt 0 ]; then
-  echo "-- o que corrigir, por tipo (detalhe no guia, seção Como atualizar)"
+  echo "-- o que corrigir, por tipo (conta itens; o resumo acima conta linhas, 2 por item: G3 e AAA)"
   printf '%s\n' "${ACH[@]}" | awk -F'\t' '
     BEGIN{d["sistema"]="lista do sistema (ca-certificates)"; d["node"]="Node"; d["deno"]="Deno"; d["bun"]="Bun";
       d["python"]="Python do sistema (certifi do usuário)"; d["venv"]="venvs e ambientes conda (certifi)"; d["java"]="Java (cacerts)";
@@ -464,7 +481,8 @@ if [ ${#ACH[@]} -gt 0 ]; then
       d["container-recriar"]="containers rodando imagem velha já substituída (só recriar)";
       d["container-local"]="containers de imagem construída aqui (grupo B: camada por cima)";
       d["container-fixada"]="containers de versão fixada (grupo C: subir a versão)";
-      d["container-supabase"]="Supabase local (grupo C: CLI + stop/start, depois testar)"}
+      d["container-supabase"]="Supabase local (grupo C: CLI + stop/start, depois testar)";
+      d["reiniciar"]="processos a reiniciar (fora de job, upload ou live)"}
     { n[$1]++; if(!($1 in ex)){ex[$1]=$2; fx[$1]=$3; ord[++k]=$1} }
     END{for(i=1;i<=k;i++){t=ord[i]; printf "   %3d  %s\n        ex.: %s\n        → %s\n", n[t], (t in d?d[t]:t), ex[t], fx[t]}}'
   if [ $COMANDOS = 1 ]; then

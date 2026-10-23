@@ -245,7 +245,7 @@ except Exception as e: print('protegido' if 'CERTIFICATE_VERIFY_FAILED' in str(e
   </div></div>
 
   <div class="step"><div class="b">3</div><div>
-    <h3>Leia o resultado: três estados</h3>
+    <h3>Leia o resultado: cinco estados</h3>
 <pre>== meuservidor · Ubuntu 24.04.3 LTS · 23/10/2026 02:36 · audita.sh 1.1.0
 -- versões
 ca-certificates 20260816ubuntu0.24.04.1
@@ -266,16 +266,22 @@ ca-certificates 20260816ubuntu0.24.04.1
    [painel-db] adminer:latest
    <span class="r">EXPOSTO  </span>  php 8.4.21                         PHP  PHP2Shell: atualize para 8.4.27+
 -- processos a reiniciar (não reinicie no meio de job, upload ou live; escolha a hora)
-REINICIE   pid 3361     meubot.service      /usr/bin/node dist/index.js
+REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/index.js
            o binário foi atualizado depois que o processo começou
 -- resumo meuservidor: 7 EXPOSTO · 0 SEM TESTE · 0 VERIFIQUE · 1 REINICIE
--- o que corrigir, por tipo (detalhe no guia, seção Como atualizar)
+-- o que corrigir, por tipo (conta itens; o resumo acima conta linhas, 2 por item: G3 e AAA)
      1  Node
+        ex.: /usr/bin/node (v24.13.0)
         → sudo apt update && sudo apt install --only-upgrade nodejs
      1  Deno
+        ex.: ~/.deno/bin/deno (2.7.14)
         → ~/.deno/bin/deno upgrade
      1  containers de tag flutuante (grupo A: puxar e recriar)
-        → cd ~/n8n && docker compose up -d --pull always n8n</pre>
+        ex.: n8n (n8nio/n8n:2.4.8)
+        → cd ~/n8n && docker compose up -d --pull always n8n
+     1  processos a reiniciar (fora de job, upload ou live)
+        ex.: meubot.service (sistema)
+        → sudo systemctl restart meubot.service</pre>
     <p>Trecho de exemplo (a saída real tem mais linhas; o script escreve em português). G3 e AAA são os dois "caminhos de confiança" testados: cada certificado de site é assinado por um intermediário, que é assinado por uma raiz que o seu programa confia.</p>
     <ul>
       <li><b>EXPOSTO</b>: conectou (ou, no Java, a lista ainda tem as raízes; no PHP, a versão é vulnerável). Corrija essa camada (seção <a href="#atualizar">Atualizar</a>).</li>
@@ -284,7 +290,7 @@ REINICIE   pid 3361     meubot.service      /usr/bin/node dist/index.js
       <li><b>VERIFIQUE</b>: PHP abaixo da versão corrigida, mas com número da distribuição (pode ter a correção por backport). Confira no changelog.</li>
       <li><b>REINICIE</b>: processo que começou antes da correção e ainda usa o programa ou a lista antiga. Veja <a href="#reiniciar">quem reiniciar</a>.</li>
     </ul>
-    <p>No fim vem o bloco <b>o que corrigir, por tipo</b>: quantos itens de cada tipo e o comando sugerido. Com <code>--comandos</code> sai a lista completa, um comando por item, para você revisar e rodar um por um. O script nunca executa a correção.</p>
+    <p>No fim vem o bloco <b>o que corrigir, por tipo</b>: quantos itens de cada tipo, um exemplo e o comando sugerido. O resumo conta linhas (cada ferramenta aparece duas vezes, G3 e AAA); o bloco conta itens. Com <code>--comandos</code> sai a lista completa, um comando por item, para você revisar e rodar um por um. O script nunca executa a correção.</p>
     <p>Código de saída: <code>0</code> nada exposto, <code>1</code> há EXPOSTO, <code>2</code> há teste que não rodou. Dá para usar em monitoramento.</p>
   </div></div>
 
@@ -320,7 +326,7 @@ REINICIE   pid 3361     meubot.service      /usr/bin/node dist/index.js
     <tr><td>Python</td><td><code>certifi 2026.10.19</code> · <code>pip 26.2.2</code> · <code>uv 0.13.4</code></td><td>em cada venv</td></tr>
     <tr><td>Node</td><td><code>22.23.4</code> · <code>24.22.1</code> · <code>26.12.1</code> (Node 20: sem correção)</td><td>dentro do binário</td></tr>
     <tr><td>Go</td><td><code>1.27.3</code> · <code>1.26.10</code> + recompilar</td><td>no Linux, a do sistema (ver passo 4)</td></tr>
-    <tr><td>Java (OpenJDK)</td><td>keystore regenerado (<code>update-ca-certificates -f</code>) ou JDK atualizado</td><td>arquivo <code>cacerts</code> de cada JDK</td></tr>
+    <tr><td>Java (OpenJDK)</td><td>as duas raízes removidas do <code>cacerts</code> (<code>keytool -delete</code>) ou JDK atualizado</td><td>arquivo <code>cacerts</code> de cada JDK</td></tr>
     <tr><td>Deno · Bun</td><td>recusaram as duas cadeias no nosso teste: <code>Deno 2.9.8</code> · <code>Bun 1.4.4</code></td><td>dentro do binário</td></tr>
     <tr><td>Firefox / NSS</td><td><code>158.0.1</code> · <code>NSS 3.131.1</code></td><td>navegador</td></tr>
     <tr><td>Electron</td><td><code>44.9.1</code> · <code>43.8.1</code> · <code>42.11.16</code></td><td>dentro de cada app</td></tr>
@@ -390,10 +396,13 @@ REINICIE   pid 3361     meubot.service      /usr/bin/node dist/index.js
 <pre><span class="c"># onde está o cacerts do Java que você usa</span>
 <span class="k">readlink -f $(dirname $(readlink -f $(which java)))/../lib/security/cacerts</span>
 <span class="k">ls /usr/lib/jvm/</span>                        <span class="c"># outros JDKs instalados</span>
-<span class="c"># ainda tem as raízes? (sem saída = limpo)</span>
-<span class="k">keytool -list -keystore /etc/ssl/certs/java/cacerts -storepass changeit | grep -iE "emsign_ecc_root_ca_-_g3|comodo_aaa"</span>
-<span class="c"># Debian/Ubuntu: refaz o cacerts a partir da lista do sistema</span>
-<span class="k">sudo update-ca-certificates -f</span></pre>
+<span class="c"># ainda tem as raízes?</span>
+<span class="k">keytool -list -keystore /etc/ssl/certs/java/cacerts -storepass changeit | grep -qiE "emsign_ecc_root_ca_-_g3|comodo_aaa" && echo EXPOSTO || echo limpo</span>
+<span class="c"># Debian/Ubuntu: guarde uma cópia e tire as duas raízes do cacerts</span>
+<span class="k">sudo cp -a /etc/ssl/certs/java/cacerts /etc/ssl/certs/java/cacerts.bak</span>
+<span class="k">sudo keytool -delete -alias debian:emsign_ecc_root_ca_-_g3.pem -keystore /etc/ssl/certs/java/cacerts -storepass changeit</span>
+<span class="k">sudo keytool -delete -alias debian:comodo_aaa_services_root.pem -keystore /etc/ssl/certs/java/cacerts -storepass changeit</span></pre>
+    <div class="nota"><b>Só <code>update-ca-certificates -f</code> não basta.</b> No nosso teste ele regravou o arquivo, mas as duas raízes continuaram lá, mesmo com o sistema já corrigido. Por isso a remoção é feita à mão, com o <code>keytool -delete</code> acima. Os nomes (<code>debian:…</code>) são os do Debian/Ubuntu; em outro JDK, use o nome que o <code>keytool -list</code> mostrar. Depois rode o teste de novo: tem que dar <code>limpo</code>.</div>
     <p>JDK com <code>cacerts</code> próprio (baixado à parte, dentro de uma IDE, num <code>/opt</code>): atualize o JDK. <code>changeit</code> é a senha padrão do arquivo, pública; ela só protege contra gravação acidental. Depois, reinicie os programas Java.</p>
   </div></div>
 
@@ -512,6 +521,8 @@ REINICIE   pid 3361     meubot.service      /usr/bin/node dist/index.js
 <span class="k">systemctl --user restart &lt;servico&gt;</span>   <span class="c"># serviços do seu usuário</span>
 <span class="k">pm2 restart all</span>                       <span class="c"># apps Node gerenciados pelo pm2 (pm2 update reinicia o próprio pm2)</span>
 <span class="k">docker compose up -d</span>                  <span class="c"># containers: recria com a imagem nova</span></pre>
+    <p>Na lista do script, cada processo vem com o que reiniciar: <code>(sistema)</code> é <code>sudo systemctl restart</code>, <code>(--user)</code> é <code>systemctl --user restart</code>, e <code>processo avulso</code> é algo que você abriu no terminal, no tmux ou no pm2: reinicie só aquele programa.</p>
+    <div class="nota red"><b>Nunca reinicie <code>user@1000.service</code></b> (ou outro número): é a sessão inteira do usuário. Derruba terminais, tmux, jobs e uploads de uma vez.</div>
     <div class="nota red"><b>Escolha a hora.</b> Não reinicie no meio de um trabalho longo: render, upload, transmissão ao vivo, migração de banco, fila de jobs. Espere terminar ou avise quem usa. Reiniciar o processo errado pode custar mais do que alguns minutos de exposição.</div>
     <p>Atenção: <code>docker compose restart</code> só reinicia o mesmo container, com a imagem velha. Depois de <code>pull</code> ou <code>build</code>, o certo é <code>docker compose up -d</code>.</p>
     <p>E rode o <code>audita.sh</code> de novo.</p>
@@ -537,7 +548,7 @@ REINICIE   pid 3361     meubot.service      /usr/bin/node dist/index.js
   <p class="mut" style="max-width:70ch">No mesmo dia rodamos o <code>audita.sh</code> na máquina de trabalho, a que tem dezenas de projetos, ambientes Python e containers locais. O sistema e o curl estavam protegidos. O resto não: <b>134 linhas EXPOSTO</b>. Corrigindo camada por camada, caiu para 70 e depois sobrou só o que dependia de fornecedor. O que aprendemos, na ordem em que apareceu:</p>
   <div class="grid g2">
     <div class="card"><h3>1. Os testes que faltavam</h3><ul>
-      <li><b>Java</b>: o <code>cacerts</code> do OpenJDK 8 era de 2025 e ainda tinha as duas raízes, com o sistema já corrigido. <code>update-ca-certificates -f</code> refez o arquivo.</li>
+      <li><b>Java</b>: o <code>cacerts</code> do OpenJDK 8 era de 2025 e ainda tinha as duas raízes, com o sistema já corrigido. <code>update-ca-certificates -f</code> regravou o arquivo, mas as raízes ficaram: foi preciso tirar as duas com <code>keytool -delete</code>.</li>
       <li><b>Deno e Bun</b> conectavam (2.7.12 e 1.3.13). <code>deno upgrade</code> e <code>bun upgrade</code> resolveram.</li>
       <li><b>Go</b> 1.26.3 recusou no teste real: ele segue a lista do sistema.</li>
     </ul></div>

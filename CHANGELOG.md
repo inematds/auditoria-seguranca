@@ -13,13 +13,15 @@ Lições da correção de uma máquina de desenvolvimento (134 EXPOSTO → quase
 - Seção "processos a reiniciar": Node/Deno/Bun/Java/PHP cujo binário foi trocado depois que o processo começou, processos que usam ferramenta ainda EXPOSTA e processos de venv iniciados antes do certifi novo, com a unidade systemd.
 - Containers testados em paralelo (6 por vez) e classificados pelo `docker inspect`: tag flutuante, imagem nova já no disco (só recriar), imagem construída localmente (camada por cima), versão fixada e Supabase local.
 - Resumo agrupado por tipo com a correção sugerida; `--comandos` lista os comandos (nunca executa).
+- Cada REINICIE diz o que reiniciar: unidade do sistema, unidade `--user` ou processo avulso (nunca o `user@NNNN.service`); os reinícios entram no resumo e no `--comandos`.
+- Java: a correção sugerida é `keytool -delete` das duas raízes (com backup); `update-ca-certificates -f` sozinho regrava o arquivo mas não as tira.
 - `--chave` para usar uma chave SSH específica; `--versao`.
 - wget do busybox: recusa ambígua ("ssl_client"/"reset by peer") é confirmada contra um site bom.
 - Testes em Node/Python saem com códigos próprios: um travamento vira `SEM TESTE`, nunca "protegido".
 - Comparação de versão em sh puro (há containers sem `awk` nem `sort -V`).
 
 ### Guia (PT/EN/ES)
-- Novos passos: Java (cacerts), Deno e Bun, reinício com "quem reiniciar" e aviso para não reiniciar no meio de job.
+- Novos passos: Java (cacerts, com `keytool -delete`), Deno e Bun, reinício com "quem reiniciar" e aviso para não reiniciar no meio de job.
 - Docker reescrito: os 3 grupos, a camada por cima da imagem antiga (`:pre-emudhra`), Supabase local (backup, CLI nova, testar de novo, esperar o fornecedor), armadilhas (uv.lock, proxy nginx 502, compose 1.29, busybox wget).
 - Go: no Linux segue a lista do sistema (teste com lista antiga).
 - Python: venv do uv sem pip, `uv run`, conda.
