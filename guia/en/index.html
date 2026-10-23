@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>auditoria-seguranca — update and audit your systems (eMudhra + PHP2Shell)</title>
+<meta name="description" content="Urgent guide: how to update every layer (system, Python, Node, Go, Docker, n8n), how to audit with a script that tests the real connection, the eMudhra case of broken certificate keys, and the PHP2Shell flaw.">
+<meta property="og:title" content="CRITICAL: update your systems — auditoria-seguranca">
+<meta property="og:description" content="Broken certificate keys (one was the number 4) + the PHP2Shell flaw. How to update and how to really audit.">
+<meta property="og:image" content="https://inematds.github.io/auditoria-seguranca/guia/assets/banner-en.jpg">
+<link rel="alternate" hreflang="pt-BR" href="https://inematds.github.io/auditoria-seguranca/guia/">
+<link rel="alternate" hreflang="en" href="https://inematds.github.io/auditoria-seguranca/guia/en/">
+<link rel="alternate" hreflang="es" href="https://inematds.github.io/auditoria-seguranca/guia/es/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0c0c10; --bg2:#14141b; --card:#16161e; --line:#272730;
+    --txt:#e9e9ee; --mut:#9a9aa6; --amb:#FACC15; --amb2:#f0c070; --sky:#38bdf8; --pro:#cbd5e1;
+    --red:#f87171; --ok:#4ade80;
+    color-scheme:dark;
+  }
+  body.light{
+    --bg:#f6f7f9; --bg2:#eceef2; --card:#ffffff; --line:#e1e3ea;
+    --txt:#1a1a22; --mut:#5b5b68; --amb:#a16207; --amb2:#a16207; --sky:#0369a1; --pro:#b45309;
+    --red:#b91c1c; --ok:#15803d;
+    color-scheme:light;
+  }
+  body.light .hero .glow{opacity:.5}
+  body.light pre{background:#0e0e14;color:#d6d6e0}
+  body.light pre .c{color:#8a8a98}
+  body.light pre .k{color:#f0c070}
+  body.light .btn{background:#FACC15;color:#1a1206}
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.65 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  h1,h2,h3{font-family:Sora,sans-serif;line-height:1.15;margin:0}
+  a{color:var(--amb);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code,pre{font-family:"JetBrains Mono",monospace}
+  p code,li code,td code{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:.05em .35em;font-size:.88em;overflow-wrap:anywhere}
+  .wrap{max-width:1160px;margin:0 auto;padding:0 22px}
+  .mut{color:var(--mut)} .amb{color:var(--amb)}
+  .chip{display:inline-block;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--amb);font-weight:600;font-family:Sora}
+  nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(12px);background:rgba(12,12,16,.78);border-bottom:1px solid var(--line)}
+  body.light nav{background:rgba(246,247,249,.85)}
+  nav .wrap{display:flex;align-items:center;gap:22px;height:60px}
+  nav .brand{display:flex;align-items:center;gap:8px;font-family:Sora;font-weight:800;letter-spacing:-.02em;color:var(--amb)}
+  nav .brand .emoji{font-size:1.25rem}
+  nav .sep{color:var(--mut);opacity:.45}
+  nav .inema{color:var(--sky);font-weight:600;font-size:.88rem;font-family:Sora}
+  nav .pro{color:var(--pro);font-weight:600;font-size:.88rem;font-family:Sora}
+  nav .clubpro{display:inline-flex;align-items:center;gap:6px}
+  nav .links{margin-left:auto;display:flex;align-items:center;gap:18px;font-size:.9rem}
+  nav .links a.sec{color:var(--mut)} nav .links a.sec:hover{color:var(--txt);text-decoration:none}
+  .lang{display:inline-flex;gap:2px;font-family:Sora;font-size:.78rem}
+  .lang a{color:var(--mut);padding:.2em .45em;border-radius:6px} .lang a.on{color:var(--amb);background:rgba(250,204,21,.12)}
+  .tgl{background:var(--bg2);border:1px solid var(--line);color:var(--txt);width:38px;height:38px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:1.05rem}
+  .tgl:hover{border-color:var(--amb)}
+  .btn{display:inline-block;background:var(--amb);color:#1a1206;font-weight:600;padding:.6em 1.05em;border-radius:10px;font-family:Sora}
+  .btn:hover{text-decoration:none;filter:brightness(1.06)}
+  .btn.ghost{background:transparent;color:var(--txt);border:1px solid var(--line)}
+  @media(max-width:1180px){nav .links a.sec.opt{display:none}}
+  @media(max-width:860px){nav .links a.sec{display:none}}
+  @media(max-width:520px){nav .wrap{gap:8px;padding:8px 14px;height:auto;flex-wrap:wrap} nav .links{gap:8px;margin-left:0;width:100%;justify-content:space-between} nav .btn{padding:.45em .7em;font-size:.82rem} .tgl{width:34px;height:34px}}
+  .alerta{background:#FACC15;color:#1a1206;font-family:Sora;font-weight:600;font-size:.92rem;text-align:center;padding:.55em 16px}
+  .alerta a{color:#1a1206;text-decoration:underline}
+  .hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
+  .hero .glow{position:absolute;inset:-40% -20% auto auto;width:70%;height:600px;background:radial-gradient(closest-side,rgba(250,204,21,.16),transparent 70%);pointer-events:none}
+  .hero .wrap{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;padding:66px 22px}
+  .hero h1{font-size:clamp(2.1rem,4.6vw,3.3rem);font-weight:800;letter-spacing:-.025em}
+  .hero p.lead{font-size:1.15rem;color:var(--mut);margin:1.1em 0 1.6em;max-width:40ch}
+  .hero .cta{display:flex;gap:12px;flex-wrap:wrap}
+  .hero figure{margin:0;border-radius:16px;overflow:hidden;border:1px solid var(--line);box-shadow:0 30px 80px -30px #000}
+  .hero figure img{width:100%;height:auto;display:block}
+  .resumo{padding:38px 0 34px;border-bottom:1px solid var(--line)}
+  .resumo p{font-size:1.12rem;line-height:1.7;max-width:74ch;margin:.55em 0 0}
+  @media(max-width:860px){.hero .wrap{grid-template-columns:1fr;padding:44px 22px}}
+  section{padding:60px 0;border-bottom:1px solid var(--line)}
+  section h2{font-size:clamp(1.5rem,3.4vw,2.1rem);font-weight:800;letter-spacing:-.02em}
+  section .sub{color:var(--mut);margin:.6em 0 2em;max-width:68ch}
+  h3.bloco{font-size:1.2rem;margin:2.2em 0 .8em}
+  .grid{display:grid;gap:16px}
+  .g3{grid-template-columns:repeat(3,1fr)} .g4{grid-template-columns:repeat(4,1fr)} .g2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:820px){.g3,.g4{grid-template-columns:1fr 1fr}}
+  @media(max-width:560px){.g2,.g3,.g4{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;min-width:0}
+  .card h3{font-size:1.05rem;margin-bottom:.4em}
+  .card p,.card li{color:var(--mut);font-size:.93rem;margin:0}
+  .card ul{margin:.4em 0 0;padding-left:1.1em}
+  .card pre{margin:.8em 0 0}
+  .card.red{border-color:rgba(248,113,113,.45)}
+  .card.ok{border-color:rgba(74,222,128,.4)}
+  .flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+  .flow span{background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:.45em .9em;font-size:.85rem;font-family:Sora;font-weight:600}
+  .flow .arr{color:var(--amb);border:none;background:none;padding:0 .1em}
+  pre{background:#0a0a0e;border:1px solid var(--line);border-radius:12px;padding:14px 16px;overflow:auto;font-size:.84rem;line-height:1.6;color:#d6d6e0;margin:.6em 0 0}
+  pre .c{color:#77778a} pre .k{color:#f0c070} pre .s{color:#9ece6a} pre .r{color:#f87171;font-weight:600} pre .g{color:#4ade80}
+  .step{display:grid;grid-template-columns:46px minmax(0,1fr);gap:16px;margin-bottom:28px}
+  .step>div{min-width:0}
+  .step .b{width:46px;height:46px;border-radius:12px;background:#FACC15;color:#1a1206;font-family:Sora;font-weight:800;font-size:1.25rem;display:flex;align-items:center;justify-content:center}
+  .step h3{font-size:1.12rem;margin-bottom:.3em}
+  .step p{color:var(--mut);margin:.2em 0 .5em}
+  .step ul{color:var(--mut);margin:.2em 0 .5em;padding-left:1.15em}
+  .tab{width:100%;border-collapse:collapse;font-size:.9rem;margin-top:8px}
+  .tab th,.tab td{border-bottom:1px solid var(--line);padding:.6em .5em;text-align:left;vertical-align:top}
+  .tab th{font-family:Sora;font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
+  .tabwrap{overflow-x:auto}
+  .nota{border-left:3px solid #FACC15;background:var(--bg2);padding:12px 16px;border-radius:0 10px 10px 0;margin:18px 0;color:var(--txt);font-size:.95rem}
+  .nota.red{border-left-color:var(--red)}
+  .big{font-family:Sora;font-weight:800;font-size:2.2rem;color:var(--amb);line-height:1}
+  .vids{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:12px}
+  @media(max-width:820px){.vids{grid-template-columns:1fr 1fr}}
+  .vids a{display:block;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:.88rem;color:var(--txt)}
+  .vids a b{display:block;font-family:Sora;color:var(--amb);font-size:.8rem;margin-bottom:.2em}
+  footer{padding:46px 0;text-align:center;color:var(--mut);font-size:.9rem}
+  .pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:.3em .8em;font-size:.78rem;color:var(--mut);margin:0 4px 6px}
+  ol.fontes{color:var(--mut);font-size:.92rem;padding-left:1.2em} ol.fontes a{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+
+<div class="alerta">⚠ Security notice from 10/23/2026 · run the test in the <a href="#auditar">Audit</a> section today, on every machine</div>
+
+<nav><div class="wrap">
+  <a class="brand" href="#top"><span class="emoji">🛡️</span> auditoria-seguranca</a>
+  <span class="sep">|</span>
+  <span class="clubpro">
+    <a class="inema" href="https://inema.club" target="_blank" rel="noopener">INEMA.CLUB</a>
+    <span class="sep">-</span>
+    <a class="pro" href="https://inema.pro" target="_blank" rel="noopener">PRO</a>
+  </span>
+  <div class="links">
+    <a class="sec" href="#oque">What happened</a>
+    <a class="sec" href="#auditar">Audit</a>
+    <a class="sec" href="#atualizar">Update</a>
+    <a class="sec opt" href="#caso">Real case</a>
+    <a class="sec" href="#php">PHP2Shell</a>
+    <a class="sec opt" href="#rotina">Routine</a>
+    <span class="lang"><a href="../">PT</a><a class="on" href="./">EN</a><a href="../es/">ES</a></span>
+    <button class="tgl" id="themeToggle" aria-label="Toggle theme" title="Toggle theme">🌙</button>
+    <a class="btn" href="https://github.com/inematds/auditoria-seguranca" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</div></nav>
+
+<header class="hero" id="top">
+  <div class="glow"></div>
+  <div class="wrap">
+    <div>
+      <span class="chip">Critical · eMudhra + PHP2Shell · October 2026</span>
+      <h1>Update and <span class="amb">audit</span> your systems today</h1>
+      <p class="lead">Your browser already protects you. Your server, your Python, your Node, your containers and your n8n may not be. Here is how to really test them and how to fix each layer.</p>
+      <div class="cta">
+        <a class="btn" href="#auditar">Test now</a>
+        <a class="btn ghost" href="#atualizar">How to update</a>
+      </div>
+    </div>
+    <figure><img src="../assets/banner-en.jpg" alt="CRITICAL: update your systems now. Broken certificate keys (one was the number 4) + the PHP2Shell flaw"></figure>
+  </div>
+</header>
+
+<section id="resumo" class="resumo"><div class="wrap">
+  <span class="chip">In short</span>
+  <p>This is a security guide for anyone running a server, website, automation or AI agent. In October 2026 two serious pieces of news arrived together: the secret keys of 8 certificates from the certificate authority eMudhra leaked (one of them was literally the number 4), and a flaw in PHP, called PHP2Shell, lets attackers break into sites without a password. The guide shows how to test whether each tool is still exposed, using a script that only reads and changes nothing, and how to update each layer. All you need is a terminal on the machine you want to check.</p>
+</div></section>
+
+<!-- ===================================================== O QUE HOUVE -->
+<section id="oque"><div class="wrap">
+  <span class="chip">What happened</span>
+  <h2>Two serious flaws in the same week</h2>
+  <p class="sub">One breaks the trust behind the HTTPS padlock outside the browser. The other opens PHP sites to break-ins with no login.</p>
+  <figure style="margin:0 0 26px;border-radius:16px;overflow:hidden;border:1px solid var(--line);box-shadow:0 30px 80px -30px #000"><img src="../assets/banner-grade-en.jpg" alt="Security audit: update, audit and test the real connection — system, Python, Node, Docker, n8n, PHP" loading="lazy" style="width:100%;display:block"></figure>
+
+  <h3 class="bloco">1. eMudhra: certificate keys small enough to fit in a tiny number</h3>
+  <div class="grid g3">
+    <div class="card"><div class="big">8</div><h3 style="margin-top:.4em">intermediate certificates</h3><p>From the certificate authority eMudhra, created in a ceremony on 04/30/2025: 6 for websites (TLS) and 2 for signing software. The chains go through the root <code>emSign ECC Root CA – G3</code> and the cross-signed <code>AAA Certificate Services</code> (Sectigo).</p></div>
+    <div class="card"><div class="big">4</div><h3 style="margin-top:.4em">one of the secret keys</h3><p>P-384 keys should be gigantic numbers. These came out smaller than 256: <b>4, 56, 66, 115, 155, 156, 230 and 237</b>. Anyone can find them in under a second. Discovered on 10/17/2026 by the researcher "Wayne".</p></div>
+    <div class="card red"><div class="big">?</div><h3 style="margin-top:.4em">why it is serious</h3><p>With the key of a trusted certificate authority, you can issue a "valid" HTTPS certificate for any site and sit in the middle of the connection. Until 10/21 there was no confirmed exploitation, but the keys are public.</p></div>
+  </div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card ok"><h3>✅ Already protected</h3><p>Browsers: Chrome and Firefox (10/17), Microsoft (10/20), Apple (10/22). Fixed Firefox: 158.0.1 (NSS 3.131.1).</p></div>
+    <div class="card red"><h3>⚠ Need your action</h3><p>Everything that is not a browser and keeps its own list of certificates: old <code>curl</code>, Python (<code>certifi</code>), Node, Go, Docker, n8n, AI agents, Electron apps, Rust programs, devices with no updates.</p></div>
+  </div>
+
+  <h3 class="bloco">2. PHP2Shell: breaking into a PHP site with no password</h3>
+  <div class="grid g3">
+    <div class="card red"><h3>What it is</h3><p>Two critical flaws in PHP (<code>CVE-2026-109618</code> and <code>CVE-2026-109619</code>) that allow running commands on the server without logging in. Advisory from the PHP team on 10/21/2026.</p></div>
+    <div class="card"><h3>Who is exposed</h3><p>Every PHP installation that serves pages: PHP-FPM, Apache with mod_php, php-cgi, FrankenPHP and LiteSpeed. Higher risk with mod_php. This includes most WordPress sites.</p></div>
+    <div class="card ok"><h3>Fixed versions</h3><p><b>8.5.12 · 8.4.27 · 8.3.36 · 8.2.35</b>. Details and what to do in <a href="#php">PHP2Shell</a>.</p></div>
+  </div>
+</div></section>
+
+<!-- ===================================================== AUDITAR -->
+<section id="auditar"><div class="wrap">
+  <span class="chip">Audit · test the real connection</span>
+  <h2>Checking the version is not enough: test whether the tool connects</h2>
+  <p class="sub">The test sites below use certificates from the compromised chains. If the tool <b>connects</b>, it still trusts the broken keys. If it gives a <b>certificate error</b>, it is protected.</p>
+
+  <div class="grid g2">
+    <div class="card"><h3>10-second test (curl)</h3>
+<pre><span class="k">curl</span> <span class="s">https://dv-g3b-emudhra.we-have-a-problem.com/</span>
+<span class="k">curl</span> <span class="s">https://dv-g3b-aaa-emudhra.we-have-a-problem.com/</span>
+<span class="c"># "SSL certificate problem" = protected</span>
+<span class="c"># showed the page          = EXPOSED</span></pre></div>
+    <div class="card"><h3>Node and Python, the same way</h3>
+<pre><span class="k">node</span> -e <span class="s">"require('https').get('https://dv-g3b-emudhra.we-have-a-problem.com/',()=>console.log('EXPOSTO')).on('error',e=>console.log('protegido?',e.code))"</span>
+<span class="c"># EXPOSTO · or "protegido? UNABLE_TO_GET_ISSUER_CERT_LOCALLY" (certificate error code)</span>
+
+<span class="k">python3</span> -c <span class="s">"import certifi,ssl,urllib.request as u
+try: u.urlopen('https://dv-g3b-emudhra.we-have-a-problem.com/',context=ssl.create_default_context(cafile=certifi.where())); print('EXPOSTO')
+except Exception as e: print('protegido' if 'CERTIFICATE_VERIFY_FAILED' in str(e) else 'SEM TESTE', e)"</span></pre>
+    <p style="margin-top:.6em">A network error (ENOTFOUND, timeout) is not "protected". When in doubt, use <code>audita.sh</code>.</p></div>
+  </div>
+  <div class="card" style="margin-top:16px"><h3>Windows and macOS</h3><p><code>audita.sh</code> is for Linux. On Windows (PowerShell) and macOS (Terminal), the quick test is the same curl: <code>curl.exe https://dv-g3b-emudhra.we-have-a-problem.com/</code> (Windows) or <code>curl https://dv-g3b-emudhra.we-have-a-problem.com/</code> (macOS), and the same for the <code>dv-g3b-aaa-emudhra</code> chain. Certificate error = protected. If you have Node or Python installed, also run the tests above.</p></div>
+
+  <div class="nota red"><b>Test both chains.</b> In our audit, several tools rejected the <code>AAA</code> chain and accepted the <code>G3</code> one (or the other way around). A single test can give a false sense of security. And a network error (DNS, timeout) is <b>not</b> "protected": it is "no test".</div>
+
+  <h3 class="bloco">The <code>audita.sh</code> script: everything at once, read-only</h3>
+  <p class="mut" style="max-width:70ch">It tests the real connection with curl, wget, every Node found on disk (including Node embedded in tools), the system Python, every Python environment (venv) with its own certifi, and, from the inside, every running Docker container. It also lists outdated certifi and the Node and Go versions. It does not install, change or write anything.</p>
+
+  <div class="step"><div class="b">1</div><div>
+    <h3>Download the script and read it before running</h3>
+    <p>Golden rule: never run a script from the internet without looking at what it does. This one has about 200 commented lines.</p>
+<pre><span class="k">curl</span> -fsSLO <span class="s">https://raw.githubusercontent.com/inematds/auditoria-seguranca/main/audita.sh</span>
+<span class="k">less</span> audita.sh            <span class="c"># read it</span>
+<span class="k">chmod</span> +x audita.sh</pre>
+    <p>Or clone the repository: <code>git clone https://github.com/inematds/auditoria-seguranca</code>.</p>
+  </div></div>
+
+  <div class="step"><div class="b">2</div><div>
+    <h3>Run it on the machine</h3>
+    <p>Without <code>sudo</code> it audits your user (and the containers, if you are in the <code>docker</code> group). With <code>sudo</code> it also sees other users' folders. The disk search takes up to 3 minutes; <code>--rapido</code> (quick) skips that part.</p>
+<pre><span class="k">./audita.sh</span>                 <span class="c"># full</span>
+<span class="k">sudo ./audita.sh</span>            <span class="c"># includes Docker containers and other users</span>
+<span class="k">./audita.sh</span> --rapido        <span class="c"># without searching the disk for venvs and Node</span>
+<span class="k">./audita.sh</span> --sem-docker    <span class="c"># does not enter the containers</span></pre>
+    <p>With <code>sudo</code>, the Node installed by your user's nvm is not in the default path; it is still found by the disk search (do not use <code>--rapido</code> in that case).</p>
+  </div></div>
+
+  <div class="step"><div class="b">3</div><div>
+    <h3>Read the result: three states</h3>
+<pre>== meuservidor · Ubuntu 24.04.3 LTS · 23/10/2026 02:36
+-- versões
+ca-certificates 20260816ubuntu0.24.04.1
+-- conexão real (G3 = cadeia emSign ECC Root CA - G3 · AAA = cadeia cruzada AAA Certificate Services)
+<span class="g">protegido</span>  curl                               G3
+<span class="g">protegido</span>  curl                               AAA
+<span class="r">EXPOSTO  </span>  node v24.13.0 /usr/bin/node        G3
+<span class="g">protegido</span>  node v24.13.0 /usr/bin/node        AAA
+          versão: ATUALIZE para 24.22.1+
+<span class="g">protegido</span>  python3 do sistema (ssl)           G3
+<span class="g">protegido</span>  python3 do sistema (ssl)           AAA
+<span class="r">EXPOSTO  </span>  venv ~/projetos/app/.venv           G3
+<span class="g">protegido</span>  venv ~/projetos/app/.venv           AAA
+-- certifi abaixo de 2026.10.19 (atualize: python -m pip install -U certifi)
+   2026.7.22  ~/projetos/app/.venv/lib/python3.12/site-packages
+-- containers Docker em execução (teste de dentro de cada um)
+   [n8n] n8nio/n8n:2.4.8
+   <span class="r">EXPOSTO  </span>  node v20.19.0                      G3
+   <span class="g">protegido</span>  node v20.19.0                      AAA
+-- resumo meuservidor: 3 EXPOSTO · 0 SEM TESTE</pre>
+    <p>Example excerpt (the real output has more lines). G3 and AAA are the two "trust paths" tested: each site certificate is signed by an intermediate, which is signed by a root that your program trusts.</p>
+    <ul>
+      <li><b>EXPOSTO</b> (EXPOSED): it connected. Fix this layer (<a href="#atualizar">Update</a> section).</li>
+      <li><b>protegido</b> (protected): it refused with a certificate error.</li>
+      <li><b>SEM TESTE</b> (NOT TESTED): the test could not run (network, DNS, timeout). Repeat before concluding.</li>
+    </ul>
+    <p>Exit code: <code>0</code> nothing exposed, <code>1</code> there is EXPOSTO, <code>2</code> a test did not run. You can use it in monitoring.</p>
+  </div></div>
+
+  <div class="step"><div class="b">4</div><div>
+    <h3>Audit several servers over SSH</h3>
+    <p>The script goes through SSH itself and runs there, without copying anything to the server. Use key-based access.</p>
+<pre><span class="k">./audita.sh</span> --ssh root@servidor1 --ssh deploy@servidor2
+
+<span class="c"># or a list (one target per line; do not version-control this file)</span>
+<span class="k">./audita.sh</span> --hosts servidores.txt</pre>
+  </div></div>
+
+  <div class="step"><div class="b">5</div><div>
+    <h3>Fix, restart and run again</h3>
+    <p>The audit only ends when the summary shows <code>0 EXPOSTO · 0 SEM TESTE</code> on every machine. A process that was already running keeps the old list in memory: updating without restarting does not fix it.</p>
+  </div></div>
+</div></section>
+
+<!-- ===================================================== ATUALIZAR -->
+<section id="atualizar"><div class="wrap">
+  <span class="chip">How to update · layer by layer</span>
+  <h2>Updating the system is not enough</h2>
+  <p class="sub">Each tool may have its own list of trusted certificates. The system's <code>ca-certificates</code> protects curl and anything that uses the system list. Node, Python with certifi, Go, Electron, Rust and every container have their own.</p>
+
+  <div class="tabwrap"><table class="tab">
+    <tr><th>Layer</th><th>Fixed version</th><th>Where the list lives</th></tr>
+    <tr><td>Ubuntu</td><td><code>ca-certificates 20260816ubuntu0.&lt;version&gt;</code></td><td>system</td></tr>
+    <tr><td>Debian</td><td><code>20250419~deb12u2</code> (12) · <code>+deb13u1</code> (13)</td><td>system</td></tr>
+    <tr><td>Alpine</td><td><code>ca-certificates 20261020-r0</code></td><td>system / containers</td></tr>
+    <tr><td>Python</td><td><code>certifi 2026.10.19</code> · <code>pip 26.2.2</code> · <code>uv 0.13.4</code></td><td>in each venv</td></tr>
+    <tr><td>Node</td><td><code>22.23.4</code> · <code>24.22.1</code> · <code>26.12.1</code> (Node 20: no fix)</td><td>inside the binary</td></tr>
+    <tr><td>Go</td><td><code>1.27.3</code> · <code>1.26.10</code> + recompile</td><td>inside each program</td></tr>
+    <tr><td>Firefox / NSS</td><td><code>158.0.1</code> · <code>NSS 3.131.1</code></td><td>browser</td></tr>
+    <tr><td>Electron</td><td><code>44.9.1</code> · <code>43.8.1</code> · <code>42.11.16</code></td><td>inside each app</td></tr>
+    <tr><td>Rust</td><td><code>rustls-webpki 0.103.16</code> · <code>webpki-roots 1.0.10</code></td><td>inside each program</td></tr>
+    <tr><td>Bun, FreeBSD</td><td>pending as of 10/21/2026</td><td>—</td></tr>
+  </table></div>
+
+  <div class="step" style="margin-top:34px"><div class="b">1</div><div>
+    <h3>System (ca-certificates)</h3>
+<pre><span class="c"># Ubuntu / Debian</span>
+<span class="k">sudo apt update && sudo apt install --only-upgrade ca-certificates</span>
+<span class="k">dpkg-query -W ca-certificates</span>          <span class="c"># check the version</span>
+<span class="c"># Alpine</span>
+<span class="k">apk upgrade --no-cache ca-certificates</span>
+<span class="c"># Fedora / RHEL</span>
+<span class="k">sudo dnf upgrade ca-certificates</span></pre>
+    <p>Keep automatic updates on (<code>unattended-upgrades</code> on Ubuntu/Debian). In our case, that is what fixed the system on its own.</p>
+  </div></div>
+
+  <div class="step"><div class="b">2</div><div>
+    <h3>Python: the certifi of each environment</h3>
+    <p><code>requests</code> and many packages use <code>certifi</code>, not the system list. Each venv has its own. <code>audita.sh</code> lists the outdated ones.</p>
+<pre><span class="k">/path/to/venv/bin/python -m pip install -U certifi pip</span>
+<span class="k">python3 -c "import certifi; print(certifi.__version__, certifi.where())"</span>  <span class="c"># 2026.10.19 or later</span>
+<span class="c"># tools installed with pipx / uv tool</span>
+<span class="k">pipx upgrade-all</span>        <span class="c"># or: pipx runpip &lt;app&gt; install -U certifi</span>
+<span class="k">uv self update</span>          <span class="c"># uv 0.13.4 or later</span>
+<span class="k">uv tool upgrade --all</span></pre>
+    <p>Watch out for the "system" Python: if EXPOSTO shows up in certifi mode, there is a certifi installed with <code>pip --user</code> in your home folder (<code>~/.local/lib/python3.X/</code>). The path printed by the command above tells you which one. On Ubuntu 24.04 and Debian 12+ pip refuses to touch it ("externally-managed-environment"); since the change stays only in your user folder, use:</p>
+<pre><span class="k">python3 -m pip install --user --break-system-packages -U certifi</span></pre>
+    <p>The certifi from the system package (<code>/usr/lib/python3/dist-packages</code>) does not need this: on Debian/Ubuntu it points to the <code>ca-certificates</code> list.</p>
+  </div></div>
+
+  <div class="step"><div class="b">3</div><div>
+    <h3>Node: switch versions (Node 20 has no fix)</h3>
+    <p>Node ships its list of certificates inside the program itself. Updating the system changes nothing for it.</p>
+<pre><span class="c"># with nvm</span>
+<span class="k">nvm install 22 && nvm alias default 22</span>     <span class="c"># 22.23.4 or later</span>
+<span class="c"># with the NodeSource repository (apt): it is separate per version.</span>
+<span class="c"># If you are on 20, switch the repository to 22 before installing:</span>
+<span class="k">curl -fsSLo nodesource_setup.sh https://deb.nodesource.com/setup_22.x</span>
+<span class="k">less nodesource_setup.sh</span>                  <span class="c"># read it</span>
+<span class="k">sudo bash nodesource_setup.sh && sudo apt install -y nodejs</span>
+<span class="c"># already on 22 or 24? just update</span>
+<span class="k">sudo apt update && sudo apt install --only-upgrade nodejs</span>
+<span class="k">node -v</span></pre>
+    <p><b>Stopgap for those who cannot switch today</b> (tested by us): make Node use the already-updated system list. It only works if <code>ca-certificates</code> is fixed. <code>--use-system-ca</code> does <b>not</b> work: it adds the two lists together and was still EXPOSTO in our test.</p>
+<pre><span class="k">export NODE_OPTIONS=--use-openssl-ca</span>   <span class="c"># in the app's service/environment; then restart</span></pre>
+    <p><code>NODE_OPTIONS</code> is the environment variable that passes options to every Node started there (in systemd: <code>Environment=NODE_OPTIONS=--use-openssl-ca</code>; in Docker: the compose <code>environment:</code> section).</p>
+    <p>Also look for <b>embedded</b> Node: Playwright, AI agents and apps ship their own Node. <code>audita.sh</code> finds these binaries on disk; update the tool that brought them.</p>
+  </div></div>
+
+  <div class="step"><div class="b">4</div><div>
+    <h3>Go: update and recompile</h3>
+    <p>An already-compiled Go program carries the old rule. Install Go 1.27.3 or 1.26.10 and build the binary again (<code>go build</code>). Third-party Go programs: update to the version they released after 10/21.</p>
+  </div></div>
+
+  <div class="step"><div class="b">5</div><div>
+    <h3>Docker: each container is a machine</h3>
+    <p>A container does not use the server's <code>ca-certificates</code>. Old image = old list.</p>
+<pre><span class="c"># ready-made images (from Docker Hub, GHCR...)</span>
+<span class="k">docker compose pull && docker compose up -d</span>
+
+<span class="c"># images you build: pull the new base and rebuild</span>
+<span class="k">docker compose build --pull --no-cache && docker compose up -d</span></pre>
+    <p>In the <code>Dockerfile</code>, replace the <code>node:20</code> base with <code>node:22</code> (or 24) and update the list at build time:</p>
+<pre><span class="k">FROM</span> node:22-bookworm-slim
+<span class="k">RUN</span> apt-get update && apt-get install -y --only-upgrade ca-certificates && rm -rf /var/lib/apt/lists/*
+<span class="c"># Alpine: RUN apk upgrade --no-cache ca-certificates</span></pre>
+  </div></div>
+
+  <div class="step"><div class="b">6</div><div>
+    <h3>n8n: back up, then update</h3>
+    <p>n8n runs on Node. Old version = old Node inside the container.</p>
+<pre><span class="c"># 1) find the volume name (compose usually puts the folder name in front)</span>
+<span class="k">docker volume ls | grep n8n</span>                 <span class="c"># e.g.: meuprojeto_n8n_data</span>
+<span class="c"># 2) stop n8n and make the backup (with it stopped, the database is not captured half-written)</span>
+<span class="k">docker compose stop n8n</span>
+<span class="k">docker run --rm -v meuprojeto_n8n_data:/data -v "$PWD":/bk alpine tar czf /bk/n8n-backup.tgz -C /data .</span>
+<span class="c"># 3) update</span>
+<span class="k">docker compose pull n8n && docker compose up -d n8n</span></pre>
+    <div class="nota"><b>Old docker-compose (1.29) trap:</b> when bringing up the new image it may fail with <code>KeyError: 'ContainerConfig'</code> and leave n8n stopped. Remove the old container first (the data stays in the volume): <code>docker-compose rm -f -s n8n && docker-compose up -d n8n</code>. Even better: migrate to <code>docker compose</code> v2.</div>
+    <p>After updating, check the log (<code>docker compose logs n8n</code>). Big version jumps can bring new warnings, such as the one about the Python runner in the Code node.</p>
+  </div></div>
+
+  <div class="step"><div class="b">7</div><div>
+    <h3>Windows, macOS, phones and apps</h3>
+    <ul>
+      <li><b>Windows</b>: Windows Update (Microsoft fix from 10/20).</li>
+      <li><b>macOS / iPhone</b>: system update (Apple, 10/22).</li>
+      <li><b>Browsers</b>: restart the browser to apply; Firefox 158.0.1 or later.</li>
+      <li><b>Electron apps</b> (VS Code, Slack, Discord and others): update each app. For developers: Electron 44.9.1 / 43.8.1 / 42.11.16.</li>
+      <li><b>Rust</b>: <code>cargo update -p rustls-webpki -p webpki-roots</code> and recompile.</li>
+    </ul>
+  </div></div>
+
+  <div class="step"><div class="b">8</div><div>
+    <h3>Restart the services</h3>
+    <p>A program that is already running held on to the old list in memory. Restart bots, APIs, workers, agents and n8n.</p>
+<pre><span class="k">sudo systemctl restart &lt;service&gt;</span>   <span class="c"># system services</span>
+<span class="k">pm2 restart all</span>                     <span class="c"># Node apps managed by pm2</span>
+<span class="k">docker compose up -d</span>                <span class="c"># containers: recreates with the new image</span></pre>
+    <p>Note: <code>docker compose restart</code> only restarts the same container, with the old image. After <code>pull</code> or <code>build</code>, the right command is <code>docker compose up -d</code>.</p>
+    <p>And run <code>audita.sh</code> again.</p>
+  </div></div>
+</div></section>
+
+<!-- ===================================================== CASO REAL -->
+<section id="caso"><div class="wrap">
+  <span class="chip">Real case</span>
+  <h2>We audited our servers. The system was fine. The rest was not.</h2>
+  <p class="sub">In the early hours of 10/23/2026 we audited 6 servers with this method. No names or addresses: the pattern is what matters.</p>
+  <div class="grid g3">
+    <div class="card ok"><h3>What was already right</h3><p>The <code>ca-certificates</code> on all 6 servers had already been fixed by automatic updates. curl rejected the bad chains.</p></div>
+    <div class="card red"><h3>What was still exposed</h3><p>Node, Python environments (certifi) and containers, including n8n, still trusted the broken keys.</p></div>
+    <div class="card"><h3>What we fixed</h3><ul><li>Node 20 → 22</li><li>certifi in the Python environments</li><li>Node embedded in an agent</li><li>n8n 2.4.8 → 2.44.6 (with backup)</li><li>4 containers rebuilt</li></ul></div>
+  </div>
+  <h3 class="bloco">Two infrastructure traps</h3>
+  <div class="grid g2">
+    <div class="card"><h3>1. Old docker-compose</h3><p>n8n did not come up after the <code>pull</code>: docker-compose 1.29 raised <code>KeyError 'ContainerConfig'</code> with the new image and the service stayed down for a few minutes. Removing the old container before <code>up</code> solved it.</p></div>
+    <div class="card"><h3>2. File mounted from /tmp</h3><p>An nginx in a container mounted its configuration from a file in <code>/tmp</code>. Cleaning <code>/tmp</code> turned the path into an empty folder, and when the container was recreated nginx would not start. Mounted configuration has to live in a permanent folder.</p></div>
+  </div>
+  <div class="nota">And the development machine? We ran <code>audita.sh</code> on it too: the system and curl were protected, but the system Node, Playwright's embedded Node, the user's Python certifi, several Python environments and dozens of local containers (databases, dashboards, AI tools) still connected. Same pattern: <b>anything that is not the system gets left behind</b>. On an already-fixed server, the script still flagged an old Node in a forgotten backup folder (<code>.bak</code>) left over after the version switch: it was not running, but it is the kind of leftover someone executes by mistake. Delete old copies you do not use.</div>
+</div></section>
+
+<!-- ===================================================== PHP2SHELL -->
+<section id="php"><div class="wrap">
+  <span class="chip">PHP2Shell</span>
+  <h2>Your PHP site can be broken into without a password</h2>
+  <p class="sub">PHP team advisory from 10/21/2026: two critical flaws allow running code on the server without logging in. The flaw is in PHP, before WordPress or any application even opens the page. A security plugin will not stop it.</p>
+
+  <div class="grid g2">
+    <div class="card"><h3>The two flaws</h3><ul>
+      <li><code>CVE-2026-109618</code>: the out-of-memory handling interrupts PHP with half-processed request data, and the cleanup treats that data as valid.</li>
+      <li><code>CVE-2026-109619</code>: an internal request state survives after memory is freed, and the next request in the same process uses that stale state.</li>
+    </ul></div>
+    <div class="card"><h3>Who is exposed</h3><ul>
+      <li>Every PHP installation that serves pages: PHP-FPM, Apache with mod_php, php-cgi, FrankenPHP, LiteSpeed.</li>
+      <li>Higher risk with <b>mod_php</b>: there is a demonstrated attack that works before any application code runs.</li>
+      <li>PHP runs under about 7 in every 10 sites, including most WordPress ones.</li>
+    </ul></div>
+  </div>
+
+  <h3 class="bloco">Your case, in three situations</h3>
+  <div class="grid g3">
+    <div class="card"><h3>1. Ready-made platform</h3><p>Shopify, Wix, Squarespace: PHP is the company's responsibility. Check the platform's security notice; if you cannot find one, ask support.</p></div>
+    <div class="card"><h3>2. WordPress on shared hosting</h3><p>Test the site (step below) and check the PHP version in the hosting panel. Below the fixed version: ask the provider to update today.</p></div>
+    <div class="card red"><h3>3. Your own server (VPS)</h3><p>It is on you and it is urgent: attacks started even before the fix was out. Update, restart and look for signs of a break-in.</p></div>
+  </div>
+
+  <div class="step" style="margin-top:34px"><div class="b">1</div><div>
+    <h3>Test: the OpenAI checker</h3>
+    <p>OpenAI published the <a href="https://github.com/openai/php2shell-checker" target="_blank" rel="noopener">php2shell-checker</a> (Apache 2.0 license). It reads the version the site advertises in its headers; it does not send an attack.</p>
+<pre><span class="k">git clone https://github.com/openai/php2shell-checker && cd php2shell-checker</span>
+<span class="k">node phpcheck.js</span> <span class="s">"https://yoursite.com"</span>
+<span class="c"># OK (0) · POTENTIALLY VULNERABLE (1) · UNKNOWN (3)</span></pre>
+    <p>Or ask your agent (Claude Code, Codex): "run php2shell-checker only against my site and explain the result". <b>UNKNOWN is not a green light</b>: the site hides its version; check in the panel or on the server.</p>
+  </div></div>
+
+  <div class="step"><div class="b">2</div><div>
+    <h3>On the server: check the real version</h3>
+<pre><span class="k">php -v</span>
+<span class="k">php-fpm8.3 -v</span>                       <span class="c"># adjust the version number</span>
+<span class="k">apt changelog php8.3-fpm | head -30</span>  <span class="c"># Debian/Ubuntu: look for CVE-2026-109618</span></pre>
+    <div class="nota"><b>Careful with the number.</b> Linux distributions and long-term support (LTS) vendors received the fix earlier and may apply it while keeping the old number (backport). That is why the header and the checker cannot see a backport: "version below the fixed one" means "investigate in your vendor's changelog", not necessarily "vulnerable".</div>
+  </div></div>
+
+  <div class="step"><div class="b">3</div><div>
+    <h3>Fix: update and restart every process</h3>
+    <ul>
+      <li>Fixed versions: <b>8.5.12, 8.4.27, 8.3.36, 8.2.35</b> (or your distribution's fixed package).</li>
+      <li><b>PHP 8.1 and earlier</b> no longer receive updates from the PHP project. Some distributions and LTS vendors have the fix: ask them or move to a supported version. Given the severity, the PHP team published minimal source-code fixes for 7.4, 8.0 and 8.1, for those who compile.</li>
+    </ul>
+<pre><span class="k">sudo apt update</span>
+<span class="k">apt list --upgradable 2>/dev/null | grep -i php</span>   <span class="c"># see what will change</span>
+<span class="k">sudo apt install --only-upgrade 'php*'</span>
+<span class="k">sudo systemctl restart php8.3-fpm</span>    <span class="c"># or apache2, if you use mod_php</span></pre>
+    <p>Using the <code>ondrej/php</code> PPA repository (common for having several versions)? It also needs to carry the fixed version; check with <code>php -v</code> afterwards. <b>mod_php</b> is PHP running inside Apache; <b>PHP-FPM</b> is PHP as a separate service, used with nginx or Apache.</p>
+  </div></div>
+
+  <div class="step"><div class="b">4</div><div>
+    <h3>Cannot update right now? Reduce the exposure</h3>
+    <p>The PHP team itself warns: these measures <b>reduce</b> known attack paths, they do <b>not make the installation safe</b>. Only updating fixes it. Apply them in <code>php.ini</code>, in the FPM pool or in the server configuration (not in <code>ini_set()</code> or <code>.user.ini</code>) and restart all workers.</p>
+<pre><span class="c"># in the FPM pool (e.g.: /etc/php/8.3/fpm/pool.d/www.conf), which the application cannot change:</span>
+php_admin_value[memory_limit] = -1
+php_admin_value[post_max_size] = 8M          <span class="c"># 32M if the site needs uploads</span>
+php_admin_value[upload_max_filesize] = 6M    <span class="c"># always below post_max_size</span>
+php_admin_flag[session.upload_progress.enabled] = off
+<span class="c"># PHP 8.5 only:</span>
+php_admin_flag[fatal_error_backtraces] = off</pre>
+    <ul>
+      <li><code>memory_limit = -1</code> (against <code>CVE-2026-109618</code>) removes PHP's memory limit. This closes the attack path, but a buggy script can consume all of the server's RAM. That is why the PHP team recommends setting a limit outside PHP: the memory limit of the container (Docker) or of the service (<i>cgroup</i>, in systemd <code>MemoryMax=</code>), preferably killing only the affected process.</li>
+      <li>Do not use <code>RLIMIT_AS</code>/<code>RLIMIT_DATA</code> (<code>ulimit</code> memory limits) instead: they can trigger exactly the vulnerable out-of-memory failure.</li>
+      <li><code>session.upload_progress.enabled</code> and <code>fatal_error_backtraces</code> turned off (against <code>CVE-2026-109619</code>) block only the confirmed paths, not other variants.</li>
+    </ul>
+  </div></div>
+
+  <div class="step"><div class="b">5</div><div>
+    <h3>Were you exposed? Look for signs of a break-in</h3>
+<pre><span class="c"># .php files created or changed in the last 7 days inside the site</span>
+<span class="k">find /var/www -name '*.php' -mtime -7 -ls</span>
+<span class="c"># .php inside the WordPress uploads folder (there should be none)</span>
+<span class="k">find /var/www -path '*wp-content/uploads*' -name '*.php' -ls</span>
+<span class="c"># scheduled tasks you did not create</span>
+<span class="k">crontab -l; sudo crontab -l -u www-data; ls -la /etc/cron.*</span>
+<span class="c"># recent logins and new users</span>
+<span class="k">last -20; tail -5 /etc/passwd</span>
+<span class="k">wp user list --role=administrator</span>   <span class="c"># WP-CLI, WordPress's command-line tool</span></pre>
+    <p>Found something you did not create: take the site offline, change passwords and keys, restore from a backup made before the break-in.</p>
+  </div></div>
+
+  <h3 class="bloco">INEMA videos about PHP2Shell</h3>
+  <div class="vids">
+    <a href="https://youtu.be/hhMZtjblMJg" target="_blank" rel="noopener"><b>FULL</b>Is your site exposed? The 3 cases</a>
+    <a href="https://youtu.be/0ZyD1vr4ua8" target="_blank" rel="noopener"><b>REEL</b>The 3 cases in 1 minute</a>
+    <a href="https://youtu.be/8_-CVlmjzOE" target="_blank" rel="noopener"><b>CASE 1</b>Ready-made platform</a>
+    <a href="https://youtu.be/NpvXUKhLYiA" target="_blank" rel="noopener"><b>CASE 2</b>WordPress on shared hosting</a>
+    <a href="https://youtu.be/pFd6q05k0q0" target="_blank" rel="noopener"><b>CASE 3</b>Your own server</a>
+  </div>
+</div></section>
+
+<!-- ===================================================== ROTINA -->
+<section id="rotina"><div class="wrap">
+  <span class="chip">Routine · so the next one doesn't catch you off guard</span>
+  <h2>What else is worth doing</h2>
+  <p class="sub">Artificial intelligence is finding old flaws faster and faster. Defense is routine, not panic.</p>
+  <div class="grid g2">
+    <div class="card"><h3>🤖 AI agents and <code>curl | bash</code></h3><ul>
+      <li>An installer of the <code>curl ... | bash</code> kind runs code from the internet as your user. Download it first, read it, and only then run it.</li>
+      <li>Check the checksum (<code>sha256sum file</code>) or the signature published by the project.</li>
+      <li>Pin versions (<code>package-lock.json</code>, <code>requirements.txt</code> with versions, Docker images with tags) and update on purpose, not by accident.</li>
+      <li>Agent with terminal access: run it in an isolated folder or container, with no secrets in sight.</li>
+    </ul></div>
+    <div class="card"><h3>📅 Monthly checklist (30 minutes)</h3><ul>
+      <li>System updates applied and automatic updates on.</li>
+      <li>Node, Python (certifi), Go and Docker images on supported versions.</li>
+      <li><code>./audita.sh</code> on every machine: summary at zero.</li>
+      <li>Backup tested: you actually restored it, not just "it exists".</li>
+      <li>Version line still supported (Node 20 and PHP 8.1 no longer are).</li>
+    </ul></div>
+    <div class="card"><h3>🔎 Watch your domain's certificates</h3><p>Every issued certificate lands in a public log (Certificate Transparency). Search for your domain on <a href="https://crt.sh" target="_blank" rel="noopener">crt.sh</a> and see whether a certificate you didn't request has appeared. A <code>CAA</code> record in DNS says which certificate authorities may issue for your domain.</p>
+<pre><span class="k">dig CAA yourdomain.com +short</span></pre></div>
+    <div class="card"><h3>⚙️ CI/CD and secrets</h3><ul>
+      <li>Rebuild images in the pipeline with <code>--pull</code>: a stale cached image brings a stale list.</li>
+      <li>Run <code>audita.sh</code> as a deploy step; an exit code other than 0 blocks the deploy.</li>
+      <li>No keys in code or in git (<code>.env</code> outside the repository); if a key leaked, rotate it, don't just delete it.</li>
+      <li>For websites, INEMA's <a href="https://inematds.github.io/blinda-site/guia/" target="_blank" rel="noopener">blinda-site</a> method looks at headers, dependencies, secrets and the database with an AI agent, without touching the live site.</li>
+    </ul></div>
+  </div>
+</div></section>
+
+<!-- ===================================================== GLOSSARIO -->
+<section id="glossario"><div class="wrap">
+  <span class="chip">Glossary</span>
+  <h2>The words in this guide</h2>
+  <div class="grid g3" style="margin-top:1.4em">
+    <div class="card"><h3>Certificate authority (CA)</h3><p>A company that signs HTTPS certificates. It is the "notary" that says: this site really is who it claims to be.</p></div>
+    <div class="card"><h3>Root, intermediate, chain</h3><p>The root is the parent signature your program trusts. It signs intermediates, which sign the sites. The sequence is the chain. The leaked keys belong to intermediates.</p></div>
+    <div class="card"><h3>P-384</h3><p>A type of elliptic-curve key. A good P-384 key is a number with more than 100 digits; eMudhra's were smaller than 256.</p></div>
+    <div class="card"><h3>ca-certificates</h3><p>A Linux package with the system's list of trusted certificate authorities. Used by curl, wget and many programs.</p></div>
+    <div class="card"><h3>certifi</h3><p>A Python package with its own list of certificate authorities. <code>requests</code> uses it, not the system's.</p></div>
+    <div class="card"><h3>venv</h3><p>An isolated Python environment for a project, with its own packages (and its own certifi).</p></div>
+    <div class="card"><h3>Container (Docker)</h3><p>A lightweight "machine" inside the server, with its own system and certificate list. Old image = old list.</p></div>
+    <div class="card"><h3>pm2 · systemd</h3><p>Managers that keep programs running on the server and restart them.</p></div>
+    <div class="card"><h3>CVE</h3><p>A public number for a security flaw, used to look up the fix (e.g.: <code>CVE-2026-109618</code>).</p></div>
+  </div>
+</div></section>
+
+<!-- ===================================================== FONTES -->
+<section id="fontes"><div class="wrap">
+  <span class="chip">Sources</span>
+  <h2>Where to verify</h2>
+  <ol class="fontes">
+    <li>Test page and details of the eMudhra case: <a href="https://emudhra.we-have-a-problem.com/" target="_blank" rel="noopener">emudhra.we-have-a-problem.com</a></li>
+    <li>Mozilla, incident discussion: <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=2083449" target="_blank" rel="noopener">bugzilla.mozilla.org/show_bug.cgi?id=2083449</a></li>
+    <li>Google, Chrome and Android protection: <a href="https://blog.google/security/protecting-chrome-and-android-users-from-compromised-emudhra-intermediate-ca-certificates/" target="_blank" rel="noopener">blog.google/security/…emudhra…</a></li>
+    <li>SOCRadar, risks and fixes: <a href="https://socradar.io/blog/emudhra-ca-key-compromise-weak-keys-risks-and-fixes/" target="_blank" rel="noopener">socradar.io/blog/emudhra-ca-key-compromise…</a></li>
+    <li>PHP, security advisory of 10/21/2026: <a href="https://www.php.net/archive/2026.php#2026-10-21-5" target="_blank" rel="noopener">php.net/archive/2026.php</a></li>
+    <li>OpenAI, PHP2Shell checker: <a href="https://github.com/openai/php2shell-checker" target="_blank" rel="noopener">github.com/openai/php2shell-checker</a></li>
+  </ol>
+</div></section>
+
+<footer>
+  <div class="wrap">
+    <div class="pill">bash</div><div class="pill">curl · node · python</div><div class="pill">docker</div><div class="pill">ssh</div>
+    <p style="margin-top:18px">auditoria-seguranca · open and free guide, updated on 10/23/2026 ·
+      <a href="https://github.com/inematds/auditoria-seguranca">inematds/auditoria-seguranca</a> ·
+      <a href="https://inema.club">INEMA.CLUB</a></p>
+  </div>
+</footer>
+
+<script>
+  (function(){
+    var KEY='auditoria-seguranca-theme';
+    var b=document.body, t=document.getElementById('themeToggle');
+    try{ if(localStorage.getItem(KEY)==='light'){ b.classList.add('light'); t.textContent='☀️'; } }catch(e){}
+    t.addEventListener('click',function(){
+      var light=b.classList.toggle('light');
+      t.textContent=light?'☀️':'🌙';
+      try{ localStorage.setItem(KEY, light?'light':'dark'); }catch(e){}
+    });
+  })();
+</script>
+</body>
+</html>
