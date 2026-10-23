@@ -607,25 +607,25 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
   <div class="grid g2">
     <div class="card"><h3>Las dos fallas</h3><ul>
       <li><code>CVE-2026-109618</code>: el manejo de falta de memoria interrumpe PHP con datos de la solicitud a medias, y la limpieza trata esos datos como válidos.</li>
-      <li><code>CVE-2026-109619</code>: un estado interno de la solicitud sobrevive después de que la memoria se libera, y la solicitud siguiente del mismo proceso usa ese estado viejo.</li>
+      <li><code>CVE-2026-109619</code>: un estado interno de la solicitud sobrevive después de que se libera la memoria, y la siguiente solicitud del mismo proceso usa ese estado viejo.</li>
     </ul></div>
     <div class="card"><h3>Quién está expuesto</h3><ul>
-      <li>Toda instalación de PHP que atiende páginas: PHP-FPM, Apache con mod_php, php-cgi, FrankenPHP, LiteSpeed.</li>
-      <li>Riesgo mayor en <b>mod_php</b>: hay un ataque demostrado que funciona antes de que corra cualquier código de la aplicación.</li>
-      <li>PHP corre por debajo de cerca de 7 de cada 10 sitios, incluida la mayoría de los WordPress.</li>
+      <li>Toda instalación PHP que atiende páginas: PHP-FPM, Apache con mod_php, php-cgi, FrankenPHP, LiteSpeed.</li>
+      <li>Mayor riesgo en <b>mod_php</b>: hay un ataque demostrado que funciona antes de que se ejecute cualquier código de la aplicación.</li>
+      <li>PHP funciona por debajo de cerca de 7 de cada 10 sitios, incluida la mayoría de los WordPress.</li>
     </ul></div>
   </div>
 
   <h3 class="bloco">Tu caso, en tres situaciones</h3>
   <div class="grid g3">
     <div class="card"><h3>1. Plataforma lista</h3><p>Shopify, Wix, Squarespace: el PHP es responsabilidad de la empresa. Revisa el aviso de seguridad de la plataforma; si no lo encuentras, pregunta al soporte.</p></div>
-    <div class="card"><h3>2. WordPress en hosting</h3><p>Prueba el sitio (paso siguiente) y revisa la versión de PHP en el panel del hosting. Si está por debajo de la versión corregida: pídele al proveedor que actualice hoy.</p></div>
-    <div class="card red"><h3>3. Servidor propio (VPS)</h3><p>Es contigo y es urgente: los ataques empezaron incluso antes de que saliera la corrección. Actualiza, reinicia y busca señales de invasión.</p></div>
+    <div class="card"><h3>2. WordPress en hosting</h3><p>Prueba el sitio (paso de abajo) y mira la versión de PHP en el panel del hosting. Por debajo de la versión corregida: pide al proveedor que actualice hoy.</p></div>
+    <div class="card red"><h3>3. Servidor propio (VPS)</h3><p>Depende de ti y es urgente: los ataques empezaron incluso antes de que saliera la corrección. Actualiza, reinicia y busca señales de intrusión.</p></div>
   </div>
 
   <div class="step" style="margin-top:34px"><div class="b">1</div><div>
     <h3>Prueba: el verificador de OpenAI</h3>
-    <p>OpenAI publicó el <a href="https://github.com/openai/php2shell-checker" target="_blank" rel="noopener">php2shell-checker</a> (licencia Apache 2.0). Lee la versión que el sitio anuncia en los encabezados; no envía ningún ataque. Necesita <code>git</code> y Node instalados en tu computador (no en el servidor).</p>
+    <p>OpenAI publicó el <a href="https://github.com/openai/php2shell-checker" target="_blank" rel="noopener">php2shell-checker</a> (licencia Apache 2.0). Lee la versión que el sitio anuncia en los encabezados; no envía ningún ataque. Necesita <code>git</code> y Node instalados en tu computadora (no en el servidor).</p>
 <pre><span class="k">git clone https://github.com/openai/php2shell-checker && cd php2shell-checker</span>
 <span class="k">node phpcheck.js</span> <span class="s">"https://seusite.com.br"</span>
 <span class="c"># OK (0) · POTENTIALLY VULNERABLE (1) · UNKNOWN (3)</span></pre>
@@ -639,12 +639,13 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 <span class="k">apt changelog php8.3-fpm | head -30</span>  <span class="c"># Debian/Ubuntu: busca CVE-2026-109618</span>
 <span class="c"># PHP dentro de contenedores (paneles, WordPress, adminer, phpMyAdmin)</span>
 <span class="k">for c in $(docker ps --format '{{.Names}}'); do echo "$c: $(docker exec $c php -v 2>/dev/null | head -1)"; done</span></pre>
-    <p>No olvides los contenedores: una imagen con PHP antiguo es tan vulnerable como el servidor, y los paneles de base de datos suelen quedar expuestos en un puerto. El <code>audita.sh</code> ya muestra la versión de PHP de cada contenedor y del servidor y la compara con las corregidas (<code>EXPOSTO</code> (EXPUESTO) por debajo de ellas; <code>VERIFIQUE</code> (VERIFICA) cuando el número es de paquete de la distribución). Para corregir: descarga la imagen nueva y recrea el contenedor (grupo A de la sección Docker).</p>
-    <div class="nota"><b>Ojo con el número.</b> Las distribuciones Linux y los proveedores de soporte largo (LTS) recibieron la corrección antes y pueden aplicarla manteniendo el número antiguo (backport). Por eso el encabezado y el verificador no ven el backport: "versión por debajo de la corregida" quiere decir "investiga en el changelog de tu proveedor", no necesariamente "vulnerable".</div>
+    <p>No olvides los contenedores: una imagen con PHP antiguo es tan vulnerable como el servidor, y los paneles de base de datos suelen quedar expuestos en un puerto. El <code>audita.sh</code> ya muestra la versión de PHP de cada contenedor y del servidor y la compara con las corregidas (<code>EXPOSTO</code> (EXPUESTO) por debajo de ellas; <code>VERIFIQUE</code> (VERIFICA) cuando el número es de un paquete de la distribución). Para corregir: descarga la imagen nueva y recrea el contenedor (grupo A de la sección Docker).</p>
+    <div class="nota"><b>Cuidado con el número.</b> Las distribuciones Linux y los proveedores de soporte largo (LTS) recibieron la corrección antes y pueden aplicarla manteniendo el número antiguo (backport). Por eso el encabezado y el verificador no ven el backport: "versión por debajo de la corregida" quiere decir "investiga en el changelog de tu proveedor", no necesariamente "vulnerable".</div>
   </div></div>
 
   <div class="step"><div class="b">3</div><div>
     <h3>Corrige: actualiza y reinicia todos los procesos</h3>
+    <p><b>Antes:</b> haz un respaldo del sitio (<code>sudo tar czf site-$(date +%F).tgz /var/www</code>) y de la base de datos (<code>mysqldump --all-databases > wp-$(date +%F).sql</code>), y anota si la home y <code>/wp-admin</code> abren. <b>Después:</b> revisa los dos de nuevo y el <code>php -v</code>. Mira la sección <a href="#antes-depois">antes y después de actualizar</a>.</p>
     <ul>
       <li>Versiones corregidas: <b>8.5.12, 8.4.27, 8.3.36, 8.2.35</b> (o el paquete corregido de tu distribución).</li>
       <li><b>PHP 8.1 y anteriores</b> ya no reciben actualizaciones del proyecto PHP. Algunas distribuciones y proveedores LTS tienen la corrección: pregúntales o sube a una versión con soporte. Por la gravedad, el equipo de PHP publicó correcciones mínimas en código fuente para 7.4, 8.0 y 8.1, para quien compila.</li>
@@ -653,7 +654,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 <span class="k">apt list --upgradable 2>/dev/null | grep -i php</span>   <span class="c"># mira qué va a cambiar</span>
 <span class="k">sudo apt install --only-upgrade $(dpkg -l 'php*' | awk '/^ii/{print $2}')</span>   <span class="c"># solo los paquetes PHP instalados</span>
 <span class="k">sudo systemctl restart php8.3-fpm</span>    <span class="c"># o apache2, si usas mod_php</span></pre>
-    <p>¿Usas el repositorio PPA <code>ondrej/php</code> (común para tener varias versiones)? También debe tener la versión corregida; confírmalo con <code>php -v</code> después. <b>mod_php</b> es PHP corriendo dentro de Apache; <b>PHP-FPM</b> es PHP como servicio separado, usado con nginx o Apache.</p>
+    <p>¿Usas el repositorio PPA <code>ondrej/php</code> (común para tener varias versiones)? También debe tener la versión corregida; confírmalo con <code>php -v</code> después. <b>mod_php</b> es PHP ejecutándose dentro de Apache; <b>PHP-FPM</b> es PHP como servicio separado, usado con nginx o Apache.</p>
   </div></div>
 
   <div class="step"><div class="b">4</div><div>
@@ -667,14 +668,14 @@ php_admin_flag[session.upload_progress.enabled] = off
 <span class="c"># solo en PHP 8.5:</span>
 php_admin_flag[fatal_error_backtraces] = off</pre>
     <ul>
-      <li><code>memory_limit = -1</code> (contra la <code>CVE-2026-109618</code>) quita el límite de memoria de PHP. Esto cierra el camino de ataque, pero un script defectuoso puede consumir toda la RAM del servidor. Por eso el equipo de PHP recomienda poner un límite fuera de PHP: el límite de memoria del contenedor (Docker) o del servicio (<i>cgroup</i>, en systemd <code>MemoryMax=</code>), de preferencia terminando solo el proceso afectado.</li>
+      <li><code>memory_limit = -1</code> (contra la <code>CVE-2026-109618</code>) quita el límite de memoria de PHP. Esto cierra el camino de ataque, pero un script con errores puede consumir toda la RAM del servidor. Por eso el equipo de PHP recomienda poner un límite fuera de PHP: el límite de memoria del contenedor (Docker) o del servicio (<i>cgroup</i>, en systemd <code>MemoryMax=</code>), de preferencia terminando solo el proceso afectado.</li>
       <li>No uses <code>RLIMIT_AS</code>/<code>RLIMIT_DATA</code> (límites de memoria de <code>ulimit</code>) en su lugar: pueden provocar justamente la falla de memoria vulnerable.</li>
-      <li>Desactivar <code>session.upload_progress.enabled</code> y <code>fatal_error_backtraces</code> (contra la <code>CVE-2026-109619</code>) bloquea solo los caminos confirmados, no otras variantes.</li>
+      <li><code>session.upload_progress.enabled</code> y <code>fatal_error_backtraces</code> desactivados (contra la <code>CVE-2026-109619</code>) bloquean solo los caminos confirmados, no otras variantes.</li>
     </ul>
   </div></div>
 
   <div class="step"><div class="b">5</div><div>
-    <h3>¿Quedó expuesto? Busca señales de invasión</h3>
+    <h3>¿Quedó expuesto? Busca señales de intrusión</h3>
 <pre><span class="c"># archivos .php creados o modificados en los últimos 7 días dentro del sitio</span>
 <span class="k">find /var/www -name '*.php' -mtime -7 -ls</span>
 <span class="c"># .php dentro de la carpeta de uploads de WordPress (ahí no debería haber ninguno)</span>
@@ -684,7 +685,7 @@ php_admin_flag[fatal_error_backtraces] = off</pre>
 <span class="c"># accesos recientes y usuarios nuevos</span>
 <span class="k">last -20; tail -5 /etc/passwd</span>
 <span class="k">wp user list --role=administrator --path=/var/www/seusite</span>   <span class="c"># WP-CLI; como root, agrega --allow-root</span></pre>
-    <p>¿Encontraste algo que tú no creaste? Saca el sitio del aire, cambia contraseñas y claves, y restaura desde un respaldo anterior a la invasión.</p>
+    <p>¿Encontraste algo que tú no creaste? Saca el sitio del aire, cambia contraseñas y claves, y restaura desde un respaldo anterior a la intrusión.</p>
   </div></div>
 
   <h3 class="bloco">Videos de INEMA sobre PHP2Shell</h3>

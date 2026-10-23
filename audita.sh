@@ -354,7 +354,7 @@ if [ ${#JKS[@]} -gt 0 ]; then
   for j in "${JKS[@]}"; do ks=${j%%|*}; kt=${j#*|}
     java_lista "$ks" "$kt" "java $(curto "$ks")"
     if [ $ULT = 0 ]; then
-      if [ "$ks" = /etc/ssl/certs/java/cacerts ]; then achado java "$ks" "sudo cp -a $ks $ks.bak && for a in debian:emsign_ecc_root_ca_-_g3.pem debian:comodo_aaa_services_root.pem; do sudo keytool -delete -alias \$a -keystore $ks -storepass changeit; done   # update-ca-certificates -f sozinho não tira as raízes; backup em .bak"
+      if [ "$ks" = /etc/ssl/certs/java/cacerts ]; then achado java "$ks" "[ \$(grep -cE '^!mozilla/(emSign_ECC_Root_CA_-_G3|Comodo_AAA_Services_root)' /etc/ca-certificates.conf) = 2 ] && sudo cp -a $ks $ks.bak && for a in debian:emsign_ecc_root_ca_-_g3.pem debian:comodo_aaa_services_root.pem; do sudo keytool -delete -alias \$a -keystore $ks -storepass changeit; done   # update-ca-certificates -f sozinho não tira as raízes; só remove se o sistema já desconfia das duas (!); backup em .bak"
       else achado java "$(curto "$ks")" "atualize o JDK dono deste cacerts (ele tem lista própria)"; fi
     fi
   done
@@ -407,6 +407,8 @@ cont_cmd(){ c=$1
     echo "local	$c ($img)	imagem construída aqui: use a camada por cima da imagem antiga (guia, seção Containers): docker tag $img ${img%:*}:pre-emudhra; FROM ${img%:*}:pre-emudhra + ca-certificates/certifi/node novos"
   elif echo "$tag" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+|^[0-9]{4}\.[0-9]{2}\.[0-9]{2}'; then   # X.Y.Z exato ou data: fixada (X.Y-alpine recebe patch: flutuante)
     echo "fixada	$c ($img)	versão fixada: puxar a mesma tag não corrige; suba a versão (compose/config) para uma lançada depois de 21/10/2026"
+  elif [ -n "$svc" ] && echo "$img" | grep -qiE '(^|/)(postgres|mysql|mariadb|mongo)(:|$)' && ! echo "$tag" | grep -qE '^[0-9]'; then
+    echo "flutuante	$c ($img)	BANCO sem versão principal fixa: fixe a versão atual no compose (ex.: postgres:16-alpine) e faça o dump ANTES; depois ${ondecompose}docker compose up -d --pull always $svc"
   elif [ -n "$svc" ]; then
     echo "flutuante	$c ($img)	${ondecompose}docker compose up -d --pull always $svc   # se continuar EXPOSTO: o fornecedor ainda não atualizou; use a camada local"
   else

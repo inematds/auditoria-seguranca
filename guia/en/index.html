@@ -601,35 +601,35 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 <!-- ===================================================== PHP2SHELL -->
 <section id="php"><div class="wrap">
   <span class="chip">PHP2Shell</span>
-  <h2>Your PHP site can be broken into without a password</h2>
-  <p class="sub">Notice from the PHP team dated 10/21/2026: two critical flaws allow code to run on the server without a login. The flaw is in PHP itself, before WordPress or any application even opens the page. A security plugin won't stop it.</p>
+  <h2>Your PHP site can be hacked without a password</h2>
+  <p class="sub">Notice from the PHP team dated 10/21/2026: two critical flaws let attackers run code on the server without logging in. The flaw is in PHP itself, before WordPress or any application opens the page. A security plugin won't stop it.</p>
 
   <div class="grid g2">
     <div class="card"><h3>The two flaws</h3><ul>
-      <li><code>CVE-2026-109618</code>: the out-of-memory handling interrupts PHP with half-processed request data, and the cleanup treats that data as valid.</li>
+      <li><code>CVE-2026-109618</code>: the out-of-memory handling stops PHP with half-processed request data, and the cleanup treats that data as valid.</li>
       <li><code>CVE-2026-109619</code>: an internal request state survives after the memory is freed, and the next request in the same process uses that stale state.</li>
     </ul></div>
     <div class="card"><h3>Who is exposed</h3><ul>
       <li>Every PHP installation that serves pages: PHP-FPM, Apache with mod_php, php-cgi, FrankenPHP, LiteSpeed.</li>
-      <li>Higher risk with <b>mod_php</b>: there is a demonstrated attack that works before any application code runs.</li>
-      <li>PHP runs under about 7 in every 10 sites, including most WordPress sites.</li>
+      <li>Higher risk on <b>mod_php</b>: there is a demonstrated attack that works before any application code runs.</li>
+      <li>PHP runs underneath about 7 in every 10 sites, including most WordPress sites.</li>
     </ul></div>
   </div>
 
   <h3 class="bloco">Your case, in three situations</h3>
   <div class="grid g3">
     <div class="card"><h3>1. Ready-made platform</h3><p>Shopify, Wix, Squarespace: PHP is the company's responsibility. Check the platform's security notice; if you can't find one, ask support.</p></div>
-    <div class="card"><h3>2. WordPress on hosting</h3><p>Test the site (step below) and check the PHP version in the hosting panel. Below the fixed version: ask the provider to update today.</p></div>
-    <div class="card red"><h3>3. Your own server (VPS)</h3><p>It's on you and it's urgent: attacks started even before the fix was released. Update, restart, and look for signs of a break-in.</p></div>
+    <div class="card"><h3>2. WordPress on hosting</h3><p>Test the site (step below) and check the PHP version in the hosting panel. Below the fixed version: ask your provider to update today.</p></div>
+    <div class="card red"><h3>3. Your own server (VPS)</h3><p>It's on you, and it's urgent: attacks started even before the fix was released. Update, restart, and look for signs of intrusion.</p></div>
   </div>
 
   <div class="step" style="margin-top:34px"><div class="b">1</div><div>
-    <h3>Test: the OpenAI checker</h3>
+    <h3>Test: OpenAI's checker</h3>
     <p>OpenAI published the <a href="https://github.com/openai/php2shell-checker" target="_blank" rel="noopener">php2shell-checker</a> (Apache 2.0 license). It reads the version the site announces in its headers; it doesn't send an attack. It needs <code>git</code> and Node installed on your computer (not on the server).</p>
 <pre><span class="k">git clone https://github.com/openai/php2shell-checker && cd php2shell-checker</span>
 <span class="k">node phpcheck.js</span> <span class="s">"https://seusite.com.br"</span>
 <span class="c"># OK (0) · POTENTIALLY VULNERABLE (1) · UNKNOWN (3)</span></pre>
-    <p>Or ask your agent (Claude Code, Codex): "run php2shell-checker only against my site and explain the result". <b>UNKNOWN is not a green light</b>: the site hides its version; check in the panel or on the server.</p>
+    <p>Or ask your agent (Claude Code, Codex): "run the php2shell-checker only against my site and explain the result". <b>UNKNOWN is not a green light</b>: the site hides its version; check in the panel or on the server.</p>
   </div></div>
 
   <div class="step"><div class="b">2</div><div>
@@ -639,15 +639,16 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 <span class="k">apt changelog php8.3-fpm | head -30</span>  <span class="c"># Debian/Ubuntu: look for CVE-2026-109618</span>
 <span class="c"># PHP inside containers (panels, WordPress, adminer, phpMyAdmin)</span>
 <span class="k">for c in $(docker ps --format '{{.Names}}'); do echo "$c: $(docker exec $c php -v 2>/dev/null | head -1)"; done</span></pre>
-    <p>Don't forget the containers: an image with old PHP is just as vulnerable as the server, and database panels are often exposed on a port. <code>audita.sh</code> already shows the PHP version of each container and of the server and compares them with the fixed ones (<code>EXPOSTO</code> (EXPOSED) below them; <code>VERIFIQUE</code> (CHECK) when the number comes from a distribution package). To fix it: pull the new image and recreate the container (group A in the Docker section).</p>
-    <div class="nota"><b>Beware of the number.</b> Linux distributions and long-term support (LTS) vendors received the fix earlier and may apply it while keeping the old number (backport). That's why the header and the checker can't see backports: "version below the fixed one" means "investigate in your vendor's changelog", not necessarily "vulnerable".</div>
+    <p>Don't forget the containers: an image with old PHP is just as vulnerable as the server, and database panels are often exposed on a port. <code>audita.sh</code> already shows the PHP version of each container and of the server and compares them with the fixed ones (<code>EXPOSTO</code> (EXPOSED) below them; <code>VERIFIQUE</code> (CHECK) when the number comes from a distribution package). To fix: pull the new image and recreate the container (group A of the Docker section).</p>
+    <div class="nota"><b>Watch out for the number.</b> Linux distributions and long-term support (LTS) vendors received the fix earlier and may apply it while keeping the old number (backport). That's why the header and the checker can't see a backport: "version below the fixed one" means "investigate in your vendor's changelog", not necessarily "vulnerable".</div>
   </div></div>
 
   <div class="step"><div class="b">3</div><div>
     <h3>Fix it: update and restart every process</h3>
+    <p><b>Before:</b> back up the site (<code>sudo tar czf site-$(date +%F).tgz /var/www</code>) and the database (<code>mysqldump --all-databases > wp-$(date +%F).sql</code>), and note whether the home page and <code>/wp-admin</code> open. <b>After:</b> check both again, plus <code>php -v</code>. See the <a href="#antes-depois">before and after updating</a> checklist.</p>
     <ul>
-      <li>Fixed versions: <b>8.5.12, 8.4.27, 8.3.36, 8.2.35</b> (or the fixed package from your distribution).</li>
-      <li><b>PHP 8.1 and earlier</b> no longer receive updates from the PHP project. Some distributions and LTS vendors have the fix: ask them or move up to a supported version. Because of the severity, the PHP team published minimal source-code fixes for 7.4, 8.0, and 8.1, for those who compile.</li>
+      <li>Fixed versions: <b>8.5.12, 8.4.27, 8.3.36, 8.2.35</b> (or your distribution's fixed package).</li>
+      <li><b>PHP 8.1 and earlier</b> no longer receive updates from the PHP project. Some distributions and LTS vendors have the fix: ask them, or move up to a supported version. Because of the severity, the PHP team published minimal source-code fixes for 7.4, 8.0 and 8.1, for those who compile.</li>
     </ul>
 <pre><span class="k">sudo apt update</span>
 <span class="k">apt list --upgradable 2>/dev/null | grep -i php</span>   <span class="c"># see what will change</span>
@@ -674,17 +675,17 @@ php_admin_flag[fatal_error_backtraces] = off</pre>
   </div></div>
 
   <div class="step"><div class="b">5</div><div>
-    <h3>Were you exposed? Look for signs of a break-in</h3>
+    <h3>Were you exposed? Look for signs of intrusion</h3>
 <pre><span class="c"># .php files created or changed in the last 7 days inside the site</span>
 <span class="k">find /var/www -name '*.php' -mtime -7 -ls</span>
-<span class="c"># .php inside the WordPress uploads folder (there shouldn't be any there)</span>
+<span class="c"># .php inside the WordPress uploads folder (there should be none)</span>
 <span class="k">find /var/www -path '*wp-content/uploads*' -name '*.php' -ls</span>
 <span class="c"># scheduled tasks you didn't create</span>
 <span class="k">crontab -l; sudo crontab -l -u www-data; ls -la /etc/cron.*</span>
 <span class="c"># recent logins and new users</span>
 <span class="k">last -20; tail -5 /etc/passwd</span>
 <span class="k">wp user list --role=administrator --path=/var/www/seusite</span>   <span class="c"># WP-CLI; as root, add --allow-root</span></pre>
-    <p>Found something you didn't create: take the site offline, change passwords and keys, and restore from a backup that predates the break-in.</p>
+    <p>Found something you didn't create: take the site offline, change passwords and keys, and restore from a backup made before the intrusion.</p>
   </div></div>
 
   <h3 class="bloco">INEMA videos about PHP2Shell</h3>

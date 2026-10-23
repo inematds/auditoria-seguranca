@@ -645,6 +645,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 
   <div class="step"><div class="b">3</div><div>
     <h3>Corrija: atualize e reinicie todos os processos</h3>
+    <p><b>Antes:</b> backup do site (<code>sudo tar czf site-$(date +%F).tgz /var/www</code>) e do banco (<code>mysqldump --all-databases > wp-$(date +%F).sql</code>), e anote se a home e o <code>/wp-admin</code> abrem. <b>Depois:</b> confira os dois de novo e o <code>php -v</code>. Veja a chamada <a href="#antes-depois">antes e depois de atualizar</a>.</p>
     <ul>
       <li>Versões corrigidas: <b>8.5.12, 8.4.27, 8.3.36, 8.2.35</b> (ou o pacote corrigido da sua distribuição).</li>
       <li><b>PHP 8.1 e anteriores</b> não recebem mais atualização do projeto PHP. Algumas distribuições e fornecedores LTS têm a correção: pergunte a eles ou suba para uma versão suportada. Pela gravidade, o time do PHP publicou correções mínimas em código-fonte para 7.4, 8.0 e 8.1, para quem compila.</li>
