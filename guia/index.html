@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>auditoria-seguranca — atualize e audite seus sistemas (eMudhra + PHP2Shell)</title>
-<meta name="description" content="Guia urgente: como atualizar cada camada (sistema, Python, Node, Go, Docker, n8n), como auditar com um script que testa a conexão real, o caso eMudhra das chaves de certificado quebradas e a falha PHP2Shell.">
+<meta name="description" content="Guia urgente: como atualizar cada camada (sistema, Python, Node, Deno, Bun, Go, Java, Docker, n8n), como auditar com um script que testa a conexão real, o caso eMudhra das chaves de certificado quebradas e a falha PHP2Shell.">
 <meta property="og:title" content="GRAVE: atualize seus sistemas — auditoria-seguranca">
 <meta property="og:description" content="Chaves de certificados quebradas (uma era o número 4) + falha PHP2Shell. Como atualizar e como auditar de verdade.">
 <meta property="og:image" content="https://inematds.github.io/auditoria-seguranca/guia/assets/banner.jpg">
@@ -220,11 +220,11 @@ except Exception as e: print('protegido' if 'CERTIFICATE_VERIFY_FAILED' in str(e
   <div class="nota red"><b>Teste as duas cadeias.</b> Na nossa auditoria, várias ferramentas recusavam a cadeia <code>AAA</code> e aceitavam a <code>G3</code> (ou o contrário). Um teste só pode dar falsa sensação de segurança. E erro de rede (DNS, timeout) <b>não</b> é "protegido": é "sem teste".</div>
 
   <h3 class="bloco">O script <code>audita.sh</code>: tudo de uma vez, só leitura</h3>
-  <p class="mut" style="max-width:70ch">Ele testa a conexão real com curl, wget, cada Node encontrado no disco (inclusive Node embutido em ferramentas), o Python do sistema, cada ambiente Python (venv) com o certifi dele e, por dentro, cada container Docker em execução. Também lista o certifi desatualizado e as versões de Node e Go. Não instala, não altera e não grava nada.</p>
+  <p class="mut" style="max-width:70ch">Ele testa a conexão real com curl, wget, cada Node, Deno e Bun encontrado no disco (inclusive os embutidos em ferramentas), o Python do sistema, cada ambiente Python (venv) com o certifi dele e, por dentro, cada container Docker em execução. Confere a lista do Java (o arquivo <code>cacerts</code>), a versão do PHP no servidor e nos containers (PHP2Shell), o certifi desatualizado e os processos que precisam ser reiniciados. No fim, agrupa o que achou por tipo, com a correção de cada um. Não instala, não altera e não corrige nada.</p>
 
   <div class="step"><div class="b">1</div><div>
     <h3>Baixe o script e leia antes de rodar</h3>
-    <p>Regra de ouro: nunca rode script da internet sem olhar o que ele faz. Este tem cerca de 200 linhas, comentadas.</p>
+    <p>Regra de ouro: nunca rode script da internet sem olhar o que ele faz. Este tem cerca de 480 linhas, comentadas.</p>
 <pre><span class="k">curl</span> -fsSLO <span class="s">https://raw.githubusercontent.com/inematds/auditoria-seguranca/main/audita.sh</span>
 <span class="k">less</span> audita.sh            <span class="c"># leia</span>
 <span class="k">chmod</span> +x audita.sh</pre>
@@ -236,14 +236,17 @@ except Exception as e: print('protegido' if 'CERTIFICATE_VERIFY_FAILED' in str(e
     <p>Sem <code>sudo</code> ele audita o seu usuário (e os containers, se você está no grupo <code>docker</code>). Com <code>sudo</code> ele enxerga também as pastas de outros usuários. A busca no disco leva até 3 minutos; <code>--rapido</code> pula essa parte.</p>
 <pre><span class="k">./audita.sh</span>                 <span class="c"># completo</span>
 <span class="k">sudo ./audita.sh</span>            <span class="c"># inclui containers Docker e outros usuários</span>
-<span class="k">./audita.sh</span> --rapido        <span class="c"># sem procurar venvs e Node no disco</span>
-<span class="k">./audita.sh</span> --sem-docker    <span class="c"># não entra nos containers</span></pre>
+<span class="k">./audita.sh</span> --rapido        <span class="c"># sem procurar venvs, Node, Deno, Bun e JDKs no disco</span>
+<span class="k">./audita.sh</span> --sem-docker    <span class="c"># não entra nos containers</span>
+<span class="k">./audita.sh</span> --comandos      <span class="c"># mostra os comandos de correção (não executa nenhum)</span>
+<span class="k">./audita.sh</span> --go            <span class="c"># também testa o Go de verdade (veja abaixo)</span></pre>
+    <p>Dois testes não são de conexão, e o script avisa isso na linha. <b>Java</b>: ele confere se o arquivo de confiança do Java (<code>cacerts</code>) ainda tem as duas raízes, porque testar a conexão exigiria compilar código Java. <b>Go</b>: o teste real compila um programa pequeno numa pasta temporária (cerca de 100 MB, apagada no fim). Como isso grava no disco, só roda com <code>--go</code>.</p>
     <p>Com <code>sudo</code>, o Node instalado pelo nvm do seu usuário não fica no caminho padrão; ele ainda é achado pela busca no disco (não use <code>--rapido</code> nesse caso).</p>
   </div></div>
 
   <div class="step"><div class="b">3</div><div>
     <h3>Leia o resultado: três estados</h3>
-<pre>== meuservidor · Ubuntu 24.04.3 LTS · 23/10/2026 02:36
+<pre>== meuservidor · Ubuntu 24.04.3 LTS · 23/10/2026 02:36 · audita.sh 1.1.0
 -- versões
 ca-certificates 20260816ubuntu0.24.04.1
 -- conexão real (G3 = cadeia emSign ECC Root CA - G3 · AAA = cadeia cruzada AAA Certificate Services)
@@ -252,23 +255,36 @@ ca-certificates 20260816ubuntu0.24.04.1
 <span class="r">EXPOSTO  </span>  node v24.13.0 /usr/bin/node        G3
 <span class="g">protegido</span>  node v24.13.0 /usr/bin/node        AAA
           versão: ATUALIZE para 24.22.1+
-<span class="g">protegido</span>  python3 do sistema (ssl)           G3
-<span class="g">protegido</span>  python3 do sistema (ssl)           AAA
+<span class="r">EXPOSTO  </span>  deno 2.7.14 ~/.deno/bin/deno       G3
 <span class="r">EXPOSTO  </span>  venv ~/projetos/app/.venv           G3
 <span class="g">protegido</span>  venv ~/projetos/app/.venv           AAA
--- certifi abaixo de 2026.10.19 (atualize: python -m pip install -U certifi)
-   2026.7.22  ~/projetos/app/.venv/lib/python3.12/site-packages
+-- Java: lista de confiança (cacerts) — conferida pelo keytool, sem conexão
+<span class="r">EXPOSTO  </span>  java /etc/ssl/certs/java/cacerts   G3   (lista do keystore, não conexão)
 -- containers Docker em execução (teste de dentro de cada um)
    [n8n] n8nio/n8n:2.4.8
    <span class="r">EXPOSTO  </span>  node v20.19.0                      G3
-   <span class="g">protegido</span>  node v20.19.0                      AAA
--- resumo meuservidor: 3 EXPOSTO · 0 SEM TESTE</pre>
+   [painel-db] adminer:latest
+   <span class="r">EXPOSTO  </span>  php 8.4.21                         PHP  PHP2Shell: atualize para 8.4.27+
+-- processos a reiniciar (não reinicie no meio de job, upload ou live; escolha a hora)
+REINICIE   pid 3361     meubot.service      /usr/bin/node dist/index.js
+           o binário foi atualizado depois que o processo começou
+-- resumo meuservidor: 7 EXPOSTO · 0 SEM TESTE · 0 VERIFIQUE · 1 REINICIE
+-- o que corrigir, por tipo (detalhe no guia, seção Como atualizar)
+     1  Node
+        → sudo apt update && sudo apt install --only-upgrade nodejs
+     1  Deno
+        → ~/.deno/bin/deno upgrade
+     1  containers de tag flutuante (grupo A: puxar e recriar)
+        → cd ~/n8n && docker compose up -d --pull always n8n</pre>
     <p>Trecho de exemplo (a saída real tem mais linhas; o script escreve em português). G3 e AAA são os dois "caminhos de confiança" testados: cada certificado de site é assinado por um intermediário, que é assinado por uma raiz que o seu programa confia.</p>
     <ul>
-      <li><b>EXPOSTO</b>: conectou. Corrija essa camada (seção <a href="#atualizar">Atualizar</a>).</li>
+      <li><b>EXPOSTO</b>: conectou (ou, no Java, a lista ainda tem as raízes; no PHP, a versão é vulnerável). Corrija essa camada (seção <a href="#atualizar">Atualizar</a>).</li>
       <li><b>protegido</b>: recusou por erro de certificado.</li>
       <li><b>SEM TESTE</b>: não deu para testar (rede, DNS, timeout). Repita antes de concluir.</li>
+      <li><b>VERIFIQUE</b>: PHP abaixo da versão corrigida, mas com número da distribuição (pode ter a correção por backport). Confira no changelog.</li>
+      <li><b>REINICIE</b>: processo que começou antes da correção e ainda usa o programa ou a lista antiga. Veja <a href="#reiniciar">quem reiniciar</a>.</li>
     </ul>
+    <p>No fim vem o bloco <b>o que corrigir, por tipo</b>: quantos itens de cada tipo e o comando sugerido. Com <code>--comandos</code> sai a lista completa, um comando por item, para você revisar e rodar um por um. O script nunca executa a correção.</p>
     <p>Código de saída: <code>0</code> nada exposto, <code>1</code> há EXPOSTO, <code>2</code> há teste que não rodou. Dá para usar em monitoramento.</p>
   </div></div>
 
@@ -278,7 +294,10 @@ ca-certificates 20260816ubuntu0.24.04.1
 <pre><span class="k">./audita.sh</span> --ssh root@servidor1 --ssh deploy@servidor2
 
 <span class="c"># ou uma lista (um destino por linha; não versione esse arquivo)</span>
-<span class="k">./audita.sh</span> --hosts servidores.txt</pre>
+<span class="k">./audita.sh</span> --hosts servidores.txt
+
+<span class="c"># chave SSH específica (vale para todos os destinos)</span>
+<span class="k">./audita.sh</span> --chave ~/.ssh/minha_chave --ssh root@servidor1</pre>
   </div></div>
 
   <div class="step"><div class="b">5</div><div>
@@ -300,11 +319,13 @@ ca-certificates 20260816ubuntu0.24.04.1
     <tr><td>Alpine</td><td><code>ca-certificates 20261020-r0</code></td><td>sistema / containers</td></tr>
     <tr><td>Python</td><td><code>certifi 2026.10.19</code> · <code>pip 26.2.2</code> · <code>uv 0.13.4</code></td><td>em cada venv</td></tr>
     <tr><td>Node</td><td><code>22.23.4</code> · <code>24.22.1</code> · <code>26.12.1</code> (Node 20: sem correção)</td><td>dentro do binário</td></tr>
-    <tr><td>Go</td><td><code>1.27.3</code> · <code>1.26.10</code> + recompilar</td><td>dentro de cada programa</td></tr>
+    <tr><td>Go</td><td><code>1.27.3</code> · <code>1.26.10</code> + recompilar</td><td>no Linux, a do sistema (ver passo 4)</td></tr>
+    <tr><td>Java (OpenJDK)</td><td>keystore regenerado (<code>update-ca-certificates -f</code>) ou JDK atualizado</td><td>arquivo <code>cacerts</code> de cada JDK</td></tr>
+    <tr><td>Deno · Bun</td><td>recusaram as duas cadeias no nosso teste: <code>Deno 2.9.8</code> · <code>Bun 1.4.4</code></td><td>dentro do binário</td></tr>
     <tr><td>Firefox / NSS</td><td><code>158.0.1</code> · <code>NSS 3.131.1</code></td><td>navegador</td></tr>
     <tr><td>Electron</td><td><code>44.9.1</code> · <code>43.8.1</code> · <code>42.11.16</code></td><td>dentro de cada app</td></tr>
     <tr><td>Rust</td><td><code>rustls-webpki 0.103.16</code> · <code>webpki-roots 1.0.10</code></td><td>dentro de cada programa</td></tr>
-    <tr><td>Bun, FreeBSD</td><td>pendentes em 21/10/2026</td><td>—</td></tr>
+    <tr><td>FreeBSD</td><td>pendente em 21/10/2026</td><td>—</td></tr>
   </table></div>
 
   <div class="step" style="margin-top:34px"><div class="b">1</div><div>
@@ -327,10 +348,15 @@ ca-certificates 20260816ubuntu0.24.04.1
 <span class="c"># ferramentas instaladas com pipx / uv tool</span>
 <span class="k">pipx upgrade-all</span>        <span class="c"># ou: pipx runpip &lt;app&gt; install -U certifi</span>
 <span class="k">uv self update</span>          <span class="c"># uv 0.13.4 ou mais</span>
-<span class="k">uv tool upgrade --all</span></pre>
+<span class="k">uv tool upgrade --all</span>
+<span class="c"># ambientes conda (miniconda/anaconda)</span>
+<span class="k">conda update -n &lt;ambiente&gt; certifi</span></pre>
     <p>Atenção ao Python "do sistema": se aparecer EXPOSTO no modo certifi, existe um certifi instalado com <code>pip --user</code> na sua pasta (<code>~/.local/lib/python3.X/</code>). O caminho mostrado pelo comando acima diz qual é. No Ubuntu 24.04 e no Debian 12+ o pip recusa mexer ali ("externally-managed-environment"); como a mudança fica só na sua pasta de usuário, use:</p>
 <pre><span class="k">python3 -m pip install --user --break-system-packages -U certifi</span></pre>
     <p>O certifi do pacote do sistema (<code>/usr/lib/python3/dist-packages</code>) não precisa disso: no Debian/Ubuntu ele aponta para a lista do <code>ca-certificates</code>.</p>
+    <p><b>Venv sem pip</b> (criado pelo <code>uv</code>): o comando <code>-m pip</code> falha. Use o uv apontando para o Python do venv:</p>
+<pre><span class="k">uv pip install --python /caminho/do/venv/bin/python -U certifi</span></pre>
+    <div class="nota"><b>Armadilha do <code>uv run</code>:</b> projeto que sobe com <code>uv run</code> ressincroniza o venv pelo <code>uv.lock</code> a cada início e desfaz o certifi novo. Suba o certifi no próprio lock: <code>uv lock --upgrade-package certifi && uv sync</code>. O <code>audita.sh</code> avisa quando o venv tem um <code>uv.lock</code> ao lado.</div>
   </div></div>
 
   <div class="step"><div class="b">3</div><div>
@@ -349,29 +375,104 @@ ca-certificates 20260816ubuntu0.24.04.1
     <p><b>Paliativo para quem não consegue trocar hoje</b> (testado por nós): mandar o Node usar a lista do sistema já atualizada. Só funciona se o <code>ca-certificates</code> estiver corrigido. <code>--use-system-ca</code> <b>não</b> serve: ele soma as duas listas e continuou EXPOSTO no nosso teste.</p>
 <pre><span class="k">export NODE_OPTIONS=--use-openssl-ca</span>   <span class="c"># no serviço/ambiente do app; depois reinicie</span></pre>
     <p>Node baixado do nvm ou do nodejs.org pode não achar a lista do sistema sozinho: se o teste der erro em tudo, acrescente <code>SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt</code> e confirme com o <code>audita.sh</code>. <code>NODE_OPTIONS</code> é a variável de ambiente que passa opções para todo Node iniciado ali (no systemd: <code>Environment=NODE_OPTIONS=--use-openssl-ca</code>; no Docker: <code>environment:</code> do compose).</p>
-    <p>Procure também Node <b>embutido</b>: o Playwright, agentes de IA e apps trazem um Node próprio. O <code>audita.sh</code> acha esses binários no disco; atualize a ferramenta que os trouxe.</p>
+    <p>Procure também Node <b>embutido</b>: o Playwright, agentes de IA e apps trazem um Node próprio. O <code>audita.sh</code> acha esses binários no disco; atualize a ferramenta que os trouxe. No caso do Playwright dentro de um venv Python, o Node fica em <code>…/site-packages/playwright/driver/node</code>: atualize o pacote (<code>pip install -U playwright</code>; no npm, <code>npm i playwright@latest</code>) ou use o paliativo <code>NODE_OPTIONS=--use-openssl-ca</code> no serviço que o usa.</p>
   </div></div>
 
   <div class="step"><div class="b">4</div><div>
     <h3>Go: atualize e recompile</h3>
-    <p>Programa Go já compilado carrega a regra antiga. Instale Go 1.27.3 ou 1.26.10 e gere o binário de novo (<code>go build</code>). Programas Go de terceiros: atualize para a versão que eles lançarem depois de 21/10.</p>
+    <p>Instale Go 1.27.3 ou 1.26.10 e gere o binário de novo (<code>go build</code>). Programas Go de terceiros: atualize para a versão que eles lançarem depois de 21/10.</p>
+    <p>O que vimos no nosso teste, no Linux: um programa feito com Go 1.26.3 recusou as duas cadeias com a lista do sistema corrigida e conectou quando apontamos para uma lista antiga (<code>SSL_CERT_FILE</code>). Ou seja, no Linux o Go segue a lista do sistema, ou a do container onde roda. Corrigir o <code>ca-certificates</code> já protege boa parte dos programas Go; quem embute a própria lista (pacote <code>x509roots/fallback</code>) ou roda em container com imagem antiga continua exposto. Por isso recompile mesmo assim. Para o teste real: <code>./audita.sh --go</code>.</p>
   </div></div>
 
   <div class="step"><div class="b">5</div><div>
-    <h3>Docker: cada container é uma máquina</h3>
-    <p>O container não usa o <code>ca-certificates</code> do servidor. Imagem antiga = lista antiga.</p>
-<pre><span class="c"># imagens prontas (do Docker Hub, GHCR...)</span>
-<span class="k">docker compose pull && docker compose up -d</span>
-
-<span class="c"># imagens que você constrói: puxe a base nova e reconstrua</span>
-<span class="k">docker compose build --pull --no-cache && docker compose up -d</span></pre>
-    <p>No <code>Dockerfile</code>, troque a base <code>node:20</code> por <code>node:22</code> (ou 24) e atualize a lista na construção:</p>
-<pre><span class="k">FROM</span> node:22-bookworm-slim
-<span class="k">RUN</span> apt-get update && apt-get install -y --only-upgrade ca-certificates && rm -rf /var/lib/apt/lists/*
-<span class="c"># Alpine: RUN apk upgrade --no-cache ca-certificates</span></pre>
+    <h3>Java: o arquivo cacerts fica para trás</h3>
+    <p>O Java não lê a lista do sistema direto: ele usa um arquivo próprio, o <code>cacerts</code>. No Debian/Ubuntu esse arquivo é gerado a partir do <code>ca-certificates</code>, mas pode não ser refeito na atualização. No nosso caso, o sistema já estava corrigido e o <code>cacerts</code> do OpenJDK 8 ainda era de 2025, com as duas raízes dentro.</p>
+<pre><span class="c"># onde está o cacerts do Java que você usa</span>
+<span class="k">readlink -f $(dirname $(readlink -f $(which java)))/../lib/security/cacerts</span>
+<span class="k">ls /usr/lib/jvm/</span>                        <span class="c"># outros JDKs instalados</span>
+<span class="c"># ainda tem as raízes? (sem saída = limpo)</span>
+<span class="k">keytool -list -keystore /etc/ssl/certs/java/cacerts -storepass changeit | grep -iE "emsign_ecc_root_ca_-_g3|comodo_aaa"</span>
+<span class="c"># Debian/Ubuntu: refaz o cacerts a partir da lista do sistema</span>
+<span class="k">sudo update-ca-certificates -f</span></pre>
+    <p>JDK com <code>cacerts</code> próprio (baixado à parte, dentro de uma IDE, num <code>/opt</code>): atualize o JDK. <code>changeit</code> é a senha padrão do arquivo, pública; ela só protege contra gravação acidental. Depois, reinicie os programas Java.</p>
   </div></div>
 
   <div class="step"><div class="b">6</div><div>
+    <h3>Deno e Bun: a lista vem dentro do programa</h3>
+    <p>Como o Node, os dois trazem a lista embutida. No nosso teste, Deno 2.7.12 e Bun 1.3.13 conectaram; depois de atualizar, Deno 2.9.8 e Bun 1.4.4 recusaram as duas cadeias.</p>
+<pre><span class="k">deno upgrade</span>
+<span class="k">bun upgrade</span>
+<span class="c"># teste de uma linha (erro de certificado = protegido)</span>
+<span class="k">deno eval</span> <span class="s">"await fetch('https://dv-g3b-emudhra.we-have-a-problem.com/')"</span>
+<span class="k">bun -e</span> <span class="s">"await fetch('https://dv-g3b-emudhra.we-have-a-problem.com/')"</span></pre>
+    <p>Os dois ficam na pasta do usuário (<code>~/.deno</code>, <code>~/.bun</code>): rode a atualização com o usuário dono, não com <code>sudo</code>.</p>
+  </div></div>
+
+  <div class="step"><div class="b">7</div><div>
+    <h3>Docker: cada container é uma máquina</h3>
+    <p>O container não usa o <code>ca-certificates</code> do servidor. Imagem antiga = lista antiga. A correção depende de como a imagem chegou aí, e o <code>audita.sh</code> já separa os containers expostos nesses grupos (pelo <code>docker inspect</code>, sem mexer em nada).</p>
+
+    <div class="grid g3" style="margin:14px 0">
+      <div class="card"><h3>A · Tag flutuante</h3><p><code>redis:alpine</code>, <code>nginx:alpine</code>, <code>postgres:16-alpine</code>, <code>…:latest</code>, <code>…:main</code>. O fornecedor troca a imagem por trás da mesma tag: basta puxar e recriar.</p></div>
+      <div class="card"><h3>B · Construída por você</h3><p>Imagem feita com <code>docker build</code> a partir de um Dockerfile seu. Reconstruir do zero pode quebrar o app; o caminho seguro é a <b>camada por cima</b>.</p></div>
+      <div class="card"><h3>C · Versão fixada</h3><p><code>kong:2.8.1</code>, <code>gotrue:v2.197.0</code>. Puxar a mesma tag de novo não muda nada: é preciso subir a versão, e às vezes esperar o fornecedor.</p></div>
+    </div>
+
+    <h3 style="margin-top:22px">Grupo A: puxe e recrie</h3>
+<pre><span class="k">docker compose up -d --pull always redis</span>      <span class="c"># um serviço; repita para os outros</span>
+<span class="k">docker compose pull && docker compose up -d</span>   <span class="c"># todos de uma vez</span>
+<span class="c"># prova: o pacote da lista dentro do container (Alpine)</span>
+<span class="k">docker exec redis apk list -I ca-certificates-bundle</span>   <span class="c"># 20261020-r0 ou mais</span></pre>
+    <p>Testando à mão com o <code>wget</code> do busybox (Alpine), a recusa aparece como <code>ssl_client: SSL_connect</code> ou <code>Connection reset by peer</code>, que parece erro de rede. Para ter certeza, teste um site bom com o mesmo wget (<code>wget -O /dev/null https://www.google.com/</code>): se esse abre, a falha do site de teste foi de certificado. O <code>audita.sh</code> já faz essa conferência.</p>
+    <ul>
+      <li><b>Container sem compose</b> (criado com <code>docker run</code>): salve a receita antes, <code>docker inspect redis > redis.inspect.json</code>, e olhe <code>.Mounts</code>. Sem volume, os dados morrem com o container: no Redis, <code>redis-cli save</code> e <code>docker cp redis:/data/dump.rdb .</code> antes; depois suba o novo com as mesmas portas e variáveis e devolva o arquivo.</li>
+      <li><b>Imagem nova já no disco, container antigo rodando</b>: acontece quando outro projeto puxou a mesma tag. Não precisa baixar nada, só recriar (<code>docker compose up -d &lt;serviço&gt;</code>). O <code>audita.sh</code> mostra esses como "só recriar".</li>
+      <li><b>"latest" ainda antiga</b>: o fornecedor pode não ter publicado a imagem corrigida. No nosso caso, uma imagem <code>:main</code> de 16/10 continuou EXPOSTA depois do pull. Aí use a camada por cima (abaixo) até sair a oficial.</li>
+    </ul>
+
+    <h3 style="margin-top:22px">Grupo B: a camada por cima da imagem antiga</h3>
+    <p>Reconstruir com <code>docker compose build --pull</code> baixa a base nova <b>e</b> todas as dependências sem trava de versão. No nosso caso, um app em Node subiu plugins novos e parou de funcionar. A técnica que funcionou: manter a imagem que já roda e só trocar a lista e o Node por cima.</p>
+<pre><span class="c"># 1) guarde a imagem atual com outro nome (é o seu caminho de volta)</span>
+<span class="k">docker tag</span> meuapp:latest meuapp:pre-emudhra
+
+<span class="c"># 2) Dockerfile.emudhra</span>
+<span class="k">FROM</span> meuapp:pre-emudhra
+<span class="k">COPY</span> --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node   <span class="c"># só se a imagem tem Node; mesma distro da base</span>
+<span class="k">RUN</span> apt-get update && apt-get install -y --only-upgrade ca-certificates && rm -rf /var/lib/apt/lists/*
+<span class="c"># Alpine: RUN apk add -u ca-certificates ca-certificates-bundle</span>
+<span class="k">RUN</span> pip install -U certifi || true                                             <span class="c"># se tem Python</span>
+
+<span class="c"># 3) construa por cima e recrie</span>
+<span class="k">docker build -f Dockerfile.emudhra -t meuapp:latest .</span>
+<span class="k">docker compose up -d meuapp</span>
+<span class="c"># deu errado? volte: docker tag meuapp:pre-emudhra meuapp:latest && docker compose up -d meuapp</span></pre>
+    <ul>
+      <li>O <code>node:22-…</code> do <code>COPY</code> tem que ser da mesma família da base (<code>bookworm</code> com Debian 12, <code>alpine</code> com Alpine), senão o binário não roda.</li>
+      <li>App que sobe com <code>uv run</code>: o uv ressincroniza o venv pelo <code>uv.lock</code> e desfaz o certifi novo. Suba o certifi no lock, ou troque só o arquivo <code>cacert.pem</code> do certifi travado pelo da lista nova.</li>
+      <li>Tem um nginx na frente (proxy)? Depois de recriar o app, reinicie o nginx também: ele guarda o endereço interno antigo e passa a responder 502.</li>
+      <li>docker-compose antigo (1.29) com <code>KeyError: 'ContainerConfig'</code>: <code>docker-compose rm -f -s &lt;serviço&gt;</code> antes do <code>up</code>.</li>
+      <li>Com calma, depois: troque a base <code>node:20</code> por <code>node:22</code> (ou 24) no Dockerfile, trave as versões das dependências e reconstrua de verdade (<code>docker compose build --pull</code>).</li>
+    </ul>
+
+    <h3 style="margin-top:22px">Grupo C: versão fixada (e o Supabase local)</h3>
+    <p>Suba a versão no compose ou na configuração para uma lançada depois de 21/10/2026 e teste de novo. Se o fornecedor ainda não reconstruiu a imagem, não há o que puxar: a espera é por ele.</p>
+    <p><b>Supabase local</b> (o da CLI <code>supabase start</code>) é o caso típico: a CLI fixa cada imagem. O caminho é este, nesta ordem:</p>
+<pre><span class="c"># 1) backup do banco (com tudo rodando)</span>
+<span class="k">docker exec supabase_db_&lt;projeto&gt; pg_dumpall -U postgres > supabase-backup.sql</span>
+<span class="c"># 2) CLI nova + parar e subir (na pasta do projeto; sem --no-backup, que apagaria os dados)</span>
+<span class="k">npx -y supabase@latest stop && npx -y supabase@latest start</span>
+<span class="c"># 3) teste de novo</span>
+<span class="k">./audita.sh --rapido</span></pre>
+    <ul>
+      <li>Nunca remova os containers do Supabase à mão (<code>docker rm</code>): use a CLI.</li>
+      <li>No nosso teste, a CLI nova trouxe imagens novas, mas 10 de 12 containers continuaram EXPOSTOS: só algumas imagens já vinham corrigidas. Enquanto o fornecedor não reconstruir, não há o que fazer além de esperar e testar de novo.</li>
+      <li>Não troque a imagem oficial por uma camada local com a mesma tag: o próximo <code>supabase start</code> descarta a sua.</li>
+      <li>O <code>start</code> pode subir mais serviços do que antes (no nosso caso, de 4 para 12 containers). Confira a memória da máquina.</li>
+      <li>Risco: com tudo só em <code>localhost</code>, a exposição é baixa. Quem faz conexão HTTPS de saída são poucos serviços (autenticação, painel, logs).</li>
+    </ul>
+  </div></div>
+
+  <div class="step"><div class="b">8</div><div>
     <h3>n8n: backup, depois atualize</h3>
     <p>O n8n roda em Node. Versão antiga = Node antigo dentro do container.</p>
 <pre><span class="c"># 1) ache o nome do volume (o compose costuma pôr o nome da pasta na frente)</span>
@@ -386,7 +487,7 @@ ca-certificates 20260816ubuntu0.24.04.1
     <p>Depois de atualizar, olhe o log (<code>docker compose logs n8n</code>). Saltos grandes de versão podem trazer avisos novos, como o do executor de Python do nó Code.</p>
   </div></div>
 
-  <div class="step"><div class="b">7</div><div>
+  <div class="step"><div class="b">9</div><div>
     <h3>Windows, macOS, celular e apps</h3>
     <ul>
       <li><b>Windows</b>: Windows Update (correção da Microsoft de 20/10).</li>
@@ -397,12 +498,21 @@ ca-certificates 20260816ubuntu0.24.04.1
     </ul>
   </div></div>
 
-  <div class="step"><div class="b">8</div><div>
-    <h3>Reinicie os serviços</h3>
-    <p>Programa que já está rodando segurou a lista antiga na memória. Reinicie bots, APIs, workers, agentes e o n8n.</p>
-<pre><span class="k">sudo systemctl restart &lt;servico&gt;</span>   <span class="c"># serviços do sistema</span>
-<span class="k">pm2 restart all</span>                     <span class="c"># apps Node gerenciados pelo pm2</span>
-<span class="k">docker compose up -d</span>                <span class="c"># containers: recria com a imagem nova</span></pre>
+  <div class="step" id="reiniciar"><div class="b">10</div><div>
+    <h3>Reinicie os serviços (e ache quem reiniciar)</h3>
+    <p>Programa que já está rodando segurou a lista antiga na memória: atualizar sem reiniciar não resolve. Bots, APIs, workers, agentes, o n8n e qualquer servidor Python com venv (uvicorn, gunicorn) precisam reiniciar depois da correção. O <code>audita.sh</code> lista na seção <b>processos a reiniciar</b> quem ainda roda com o programa antigo (o Node foi trocado depois que o processo começou) ou começou antes do certifi novo do venv dele.</p>
+<pre><span class="c"># à mão: processos Python de venv e Node, com o tempo de execução em segundos</span>
+<span class="k">ps -eo pid,etimes,args | grep -E "venv/bin/python|/node " | grep -v grep</span>
+<span class="c"># serviços que estão rodando</span>
+<span class="k">systemctl list-units --type=service --state=running</span>
+<span class="k">systemctl --user list-units --type=service --state=running</span>
+<span class="k">pm2 list</span>
+<span class="c"># reinicie</span>
+<span class="k">sudo systemctl restart &lt;servico&gt;</span>     <span class="c"># serviços do sistema</span>
+<span class="k">systemctl --user restart &lt;servico&gt;</span>   <span class="c"># serviços do seu usuário</span>
+<span class="k">pm2 restart all</span>                       <span class="c"># apps Node gerenciados pelo pm2 (pm2 update reinicia o próprio pm2)</span>
+<span class="k">docker compose up -d</span>                  <span class="c"># containers: recria com a imagem nova</span></pre>
+    <div class="nota red"><b>Escolha a hora.</b> Não reinicie no meio de um trabalho longo: render, upload, transmissão ao vivo, migração de banco, fila de jobs. Espere terminar ou avise quem usa. Reiniciar o processo errado pode custar mais do que alguns minutos de exposição.</div>
     <p>Atenção: <code>docker compose restart</code> só reinicia o mesmo container, com a imagem velha. Depois de <code>pull</code> ou <code>build</code>, o certo é <code>docker compose up -d</code>.</p>
     <p>E rode o <code>audita.sh</code> de novo.</p>
   </div></div>
@@ -423,7 +533,31 @@ ca-certificates 20260816ubuntu0.24.04.1
     <div class="card"><h3>1. docker-compose antigo</h3><p>O n8n não subiu depois do <code>pull</code>: o docker-compose 1.29 deu <code>KeyError 'ContainerConfig'</code> com a imagem nova e o serviço ficou parado por uns minutos. Resolveu remover o container antigo antes do <code>up</code>.</p></div>
     <div class="card"><h3>2. Arquivo montado a partir do /tmp</h3><p>Um nginx em container montava a configuração de um arquivo em <code>/tmp</code>. A limpeza do <code>/tmp</code> transformou o caminho numa pasta vazia, e ao recriar o container o nginx não subiu. Configuração montada tem que morar numa pasta permanente.</p></div>
   </div>
-  <div class="nota">E a máquina de desenvolvimento? Rodamos o <code>audita.sh</code> nela também: o sistema e o curl estavam protegidos, mas o Node do sistema, o Node embutido do Playwright, o certifi do Python do usuário, vários ambientes Python e dezenas de containers locais (bancos, painéis, ferramentas de IA) ainda conectavam. É o mesmo padrão: <b>quem não é o sistema fica para trás</b>. Num servidor já corrigido, o script ainda apontou um Node antigo numa pasta de backup (<code>.bak</code>) esquecida depois da troca de versão: não rodava, mas é o tipo de sobra que alguém executa por engano. Apague cópias antigas que não usa.</div>
+  <h3 class="bloco">A máquina de desenvolvimento: de 134 para quase zero</h3>
+  <p class="mut" style="max-width:70ch">No mesmo dia rodamos o <code>audita.sh</code> na máquina de trabalho, a que tem dezenas de projetos, ambientes Python e containers locais. O sistema e o curl estavam protegidos. O resto não: <b>134 linhas EXPOSTO</b>. Corrigindo camada por camada, caiu para 70 e depois sobrou só o que dependia de fornecedor. O que aprendemos, na ordem em que apareceu:</p>
+  <div class="grid g2">
+    <div class="card"><h3>1. Os testes que faltavam</h3><ul>
+      <li><b>Java</b>: o <code>cacerts</code> do OpenJDK 8 era de 2025 e ainda tinha as duas raízes, com o sistema já corrigido. <code>update-ca-certificates -f</code> refez o arquivo.</li>
+      <li><b>Deno e Bun</b> conectavam (2.7.12 e 1.3.13). <code>deno upgrade</code> e <code>bun upgrade</code> resolveram.</li>
+      <li><b>Go</b> 1.26.3 recusou no teste real: ele segue a lista do sistema.</li>
+    </ul></div>
+    <div class="card"><h3>2. Python: onde o certifi se esconde</h3><ul>
+      <li>Um certifi antigo instalado com <code>pip --user</code> na pasta do usuário passava na frente do certifi do sistema e deixava o "python3 do sistema" EXPOSTO.</li>
+      <li>Venvs criados pelo uv não têm pip: <code>uv pip install --python …</code>.</li>
+      <li>Projetos com <code>uv run</code> desfaziam a correção a cada início, pelo <code>uv.lock</code>.</li>
+    </ul></div>
+    <div class="card"><h3>3. Containers: três grupos, três correções</h3><ul>
+      <li>Tag flutuante: puxar e recriar resolveu a maioria (bancos, cache, proxy).</li>
+      <li>Imagem própria: reconstruir do zero quebrou um app (dependências sem trava). A camada por cima da imagem antiga funcionou, com a antiga guardada como <code>:pre-emudhra</code>.</li>
+      <li>Supabase local: CLI nova + stop/start trouxe imagens novas, mas a maioria seguiu EXPOSTA. É espera pelo fornecedor.</li>
+    </ul></div>
+    <div class="card"><h3>4. O que não se vê na lista</h3><ul>
+      <li>Um painel de banco (adminer) em container rodava <b>PHP 8.4.21</b>, vulnerável ao PHP2Shell, aberto numa porta. Imagem nova: 8.4.27.</li>
+      <li>O Node embutido do Playwright, dentro de um venv, seguia EXPOSTO até atualizar o pacote.</li>
+      <li>Bots e serviços continuaram usando o Node antigo até serem reiniciados.</li>
+    </ul></div>
+  </div>
+  <div class="nota">Num servidor já corrigido, o script ainda apontou um Node antigo numa pasta de backup (<code>.bak</code>) esquecida depois da troca de versão: não rodava, mas é o tipo de sobra que alguém executa por engano. Apague cópias antigas que não usa. O padrão de tudo isso é um só: <b>quem não é o sistema fica para trás</b>.</div>
 </div></section>
 
 <!-- ===================================================== PHP2SHELL -->
@@ -464,7 +598,10 @@ ca-certificates 20260816ubuntu0.24.04.1
     <h3>No servidor: veja a versão de verdade</h3>
 <pre><span class="k">php -v</span>
 <span class="k">php-fpm8.3 -v</span>                       <span class="c"># ajuste o número da versão</span>
-<span class="k">apt changelog php8.3-fpm | head -30</span>  <span class="c"># Debian/Ubuntu: procure CVE-2026-109618</span></pre>
+<span class="k">apt changelog php8.3-fpm | head -30</span>  <span class="c"># Debian/Ubuntu: procure CVE-2026-109618</span>
+<span class="c"># PHP dentro de containers (painéis, WordPress, adminer, phpMyAdmin)</span>
+<span class="k">for c in $(docker ps --format '{{.Names}}'); do echo "$c: $(docker exec $c php -v 2>/dev/null | head -1)"; done</span></pre>
+    <p>Não esqueça os containers: imagem com PHP antigo é tão vulnerável quanto o servidor, e painéis de banco costumam ficar expostos numa porta. O <code>audita.sh</code> já mostra a versão do PHP de cada container e do servidor e compara com as corrigidas (<code>EXPOSTO</code> abaixo delas; <code>VERIFIQUE</code> quando o número é de pacote da distribuição). Para corrigir: puxe a imagem nova e recrie o container (grupo A da seção Docker).</p>
     <div class="nota"><b>Cuidado com o número.</b> Distribuições Linux e fornecedores de suporte longo (LTS) receberam a correção antes e podem aplicá-la mantendo o número antigo (backport). Por isso o cabeçalho e o verificador não enxergam backport: "versão abaixo da corrigida" quer dizer "investigue no changelog do seu fornecedor", não necessariamente "vulnerável".</div>
   </div></div>
 
@@ -536,7 +673,7 @@ php_admin_flag[fatal_error_backtraces] = off</pre>
     </ul></div>
     <div class="card"><h3>📅 Checklist mensal (30 minutos)</h3><ul>
       <li>Atualizações do sistema aplicadas e atualização automática ligada.</li>
-      <li>Node, Python (certifi), Go e imagens Docker nas versões suportadas.</li>
+      <li>Node, Deno, Bun, Python (certifi), Go, Java e imagens Docker nas versões suportadas.</li>
       <li><code>./audita.sh</code> em todas as máquinas: resumo zerado.</li>
       <li>Backup testado: restaurou de verdade, não só "existe".</li>
       <li>Linha de versão ainda suportada (Node 20 e PHP 8.1 já não são).</li>
@@ -565,6 +702,8 @@ php_admin_flag[fatal_error_backtraces] = off</pre>
     <div class="card"><h3>venv</h3><p>Ambiente Python isolado de um projeto, com os próprios pacotes (e o próprio certifi).</p></div>
     <div class="card"><h3>Container (Docker)</h3><p>Uma "máquina" leve dentro do servidor, com sistema e lista de certificados próprios. Imagem antiga = lista antiga.</p></div>
     <div class="card"><h3>pm2 · systemd</h3><p>Gerenciadores que mantêm programas rodando no servidor e os reiniciam.</p></div>
+    <div class="card"><h3>cacerts · keystore</h3><p>Arquivo onde o Java guarda as certificadoras em que confia. Cada JDK pode ter o seu; o <code>keytool</code> mostra o que tem dentro.</p></div>
+    <div class="card"><h3>Tag flutuante · fixada</h3><p>O nome depois dos dois pontos na imagem Docker. Flutuante (<code>latest</code>, <code>alpine</code>) muda de conteúdo com o tempo; fixada (<code>2.8.1</code>) não muda nunca.</p></div>
     <div class="card"><h3>CVE</h3><p>Número público de uma falha de segurança, usado para procurar a correção (ex.: <code>CVE-2026-109618</code>).</p></div>
   </div>
 </div></section>
@@ -586,7 +725,7 @@ php_admin_flag[fatal_error_backtraces] = off</pre>
 <footer>
   <div class="wrap">
     <div class="pill">bash</div><div class="pill">curl · node · python</div><div class="pill">docker</div><div class="pill">ssh</div>
-    <p style="margin-top:18px">auditoria-seguranca · guia aberto e gratuito, atualizado em 23/10/2026 ·
+    <p style="margin-top:18px">auditoria-seguranca · guia aberto e gratuito, versão 1.1.0, atualizado em 23/10/2026 ·
       <a href="https://github.com/inematds/auditoria-seguranca">inematds/auditoria-seguranca</a> ·
       <a href="https://inema.club">INEMA.CLUB</a></p>
   </div>

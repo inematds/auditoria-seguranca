@@ -20,11 +20,13 @@ curl https://dv-g3b-aaa-emudhra.we-have-a-problem.com/
 # "SSL certificate problem" = protegido · mostrou a página = EXPOSTO
 ```
 
-O navegador já está protegido. curl antigo, Python (certifi), Node, Go, Docker, n8n e agentes de IA têm lista própria de certificados e precisam de correção própria.
+O navegador já está protegido. curl antigo, Python (certifi), Node, Deno, Bun, Java, Go, Docker, n8n e agentes de IA têm lista própria de certificados (ou seguem a do sistema/container) e precisam de correção própria.
 
-## O script `audita.sh` (só leitura)
+## O script `audita.sh` (só leitura) — versão 1.1.0
 
-Testa a **conexão real** (não só lista certificados) com curl, wget, cada Node do disco (inclusive Node embutido), o Python do sistema, cada venv com o certifi dele e cada container Docker em execução. Três estados: `EXPOSTO` (conectou), `protegido` (erro de certificado) e `SEM TESTE` (rede/DNS/timeout — não conta como protegido).
+Testa a **conexão real** (não só lista certificados) com curl, wget, cada Node, Deno e Bun do disco (inclusive os embutidos), o Python do sistema, cada venv e ambiente conda com o certifi dele e cada container Docker em execução. Confere também a lista do Java (`cacerts`, pelo `keytool`), a versão do PHP no servidor e nos containers (PHP2Shell) e os processos que precisam ser reiniciados. No fim, agrupa o que achou por tipo com a correção sugerida.
+
+Estados: `EXPOSTO` (conectou), `protegido` (erro de certificado), `SEM TESTE` (rede/DNS/timeout — não conta como protegido), `VERIFIQUE` (PHP de distribuição abaixo da versão corrigida: confira o backport) e `REINICIE` (processo rodando com o programa ou a lista antiga).
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/inematds/auditoria-seguranca/main/audita.sh
@@ -32,11 +34,14 @@ less audita.sh                              # leia antes de rodar
 chmod +x audita.sh
 ./audita.sh                                 # esta máquina (até 3 min)
 ./audita.sh --rapido                        # sem busca no disco
+./audita.sh --comandos                      # lista os comandos de correção (não executa)
+./audita.sh --go                            # teste real do Go (compila em pasta temporária, ~100 MB, apagada no fim)
 ./audita.sh --ssh root@servidor1 --ssh deploy@servidor2
+./audita.sh --chave ~/.ssh/minha_chave --ssh root@servidor1
 ./audita.sh --hosts servidores.txt          # um destino SSH por linha
 ```
 
-Saída: `0` nada exposto · `1` há EXPOSTO · `2` há teste que não rodou.
+Saída: `0` nada exposto · `1` há EXPOSTO · `2` há teste que não rodou. O script nunca instala, altera ou corrige nada; só grava em pasta temporária apagada no fim.
 
 ## Versões corrigidas (eMudhra)
 
@@ -47,7 +52,9 @@ Saída: `0` nada exposto · `1` há EXPOSTO · `2` há teste que não rodou.
 | Alpine | `20261020-r0` |
 | Python | `certifi 2026.10.19` · `pip 26.2.2` · `uv 0.13.4` |
 | Node | `22.23.4` · `24.22.1` · `26.12.1` (Node 20 sem correção) |
-| Go | `1.27.3` · `1.26.10` + recompilar |
+| Go | `1.27.3` · `1.26.10` + recompilar (no Linux segue a lista do sistema) |
+| Java | `sudo update-ca-certificates -f` (refaz o `cacerts`) ou JDK novo |
+| Deno · Bun | recusaram no nosso teste: `2.9.8` · `1.4.4` |
 | Firefox / NSS | `158.0.1` · `3.131.1` |
 | Electron | `44.9.1` · `43.8.1` · `42.11.16` |
 | Rust | `rustls-webpki 0.103.16` · `webpki-roots 1.0.10` |
@@ -61,16 +68,18 @@ Saída: `0` nada exposto · `1` há EXPOSTO · `2` há teste que não rodou.
 | # | Passo | Comando | Quem |
 |---|---|---|---|
 | 1 | Teste rápido com curl nas duas cadeias | `curl https://dv-g3b-emudhra.we-have-a-problem.com/` | 🧠 você |
-| 2 | Auditoria completa da máquina | `./audita.sh` | ⚙️ script |
+| 2 | Auditoria completa da máquina, com a lista de correções | `./audita.sh --comandos` | ⚙️ script |
 | 3 | Auditoria dos servidores | `./audita.sh --hosts servidores.txt` | ⚙️ script |
-| 4 | Atualizar o sistema | `sudo apt install --only-upgrade ca-certificates` | 🧠 você |
-| 5 | Atualizar o certifi de cada venv | `<venv>/bin/python -m pip install -U certifi pip` | 🧠 você |
-| 6 | Trocar o Node (20 → 22/24) | `nvm install 22` ou repositório NodeSource `setup_22.x` | 🧠 você |
-| 7 | Reconstruir containers / atualizar n8n (com backup) | `docker compose build --pull` / `docker compose pull` | 🧠 você |
-| 8 | Reiniciar serviços | `systemctl restart …` · `pm2 restart all` · `docker compose up -d` | 🧠 você |
+| 4 | Atualizar o sistema (e o `cacerts` do Java) | `sudo apt install --only-upgrade ca-certificates` · `sudo update-ca-certificates -f` | 🧠 você |
+| 5 | Atualizar o certifi de cada venv / conda | `<venv>/bin/python -m pip install -U certifi` · `uv pip install --python <venv>/bin/python -U certifi` | 🧠 você |
+| 6 | Trocar o Node (20 → 22/24), atualizar Deno e Bun | `nvm install 22` · `sudo apt install --only-upgrade nodejs` · `deno upgrade` · `bun upgrade` | 🧠 você |
+| 7 | Containers por grupo: A puxar e recriar · B camada por cima · C subir a versão / Supabase | `docker compose up -d --pull always <svc>` · `FROM <img>:pre-emudhra` · `supabase stop && supabase start` | 🧠 você |
+| 8 | Achar e reiniciar serviços (fora de job/upload/live) | seção `processos a reiniciar` do script · `systemctl restart …` · `pm2 restart all` | 🧠 você |
 | 9 | Auditar de novo até zerar | `./audita.sh` → `0 EXPOSTO · 0 SEM TESTE` | ⚙️ script |
-| 10 | PHP: testar, atualizar, reiniciar workers | `node phpcheck.js https://seusite` · `apt install --only-upgrade 'php*'` | 🧠 você |
+| 10 | PHP: testar, atualizar, reiniciar workers (servidor e containers) | `node phpcheck.js https://seusite` · `apt install --only-upgrade 'php*'` | 🧠 você |
 | 11 | Rotina mensal | checklist da seção Rotina do guia | 🧠 você |
+
+O histórico de versões está no [CHANGELOG.md](CHANGELOG.md).
 
 ## Fontes
 

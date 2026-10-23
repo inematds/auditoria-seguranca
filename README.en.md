@@ -6,48 +6,55 @@
 
 ## What it is
 
-This is a security guide for anyone running a server, website, automation, or AI agent. In October 2026, two serious pieces of news landed together: the private keys of 8 certificates from the certificate authority eMudhra leaked (one of them was literally number 4), and a flaw in PHP, called PHP2Shell, lets attackers break into sites without a password. The guide shows how to test whether each tool is still exposed, using a script that only reads and changes nothing, and how to update each layer. All you need is a terminal on the machine you want to check.
+This is a security guide for anyone running a server, website, automation, or AI agent. In October 2026, two serious pieces of news arrived together. The private keys of 8 certificates from the certificate authority eMudhra leaked (one of them was literally number 4). A PHP flaw called PHP2Shell also lets attackers break into sites without a password. The guide shows how to test whether each tool is still exposed, using a script that only reads and changes nothing, and how to update each layer. All you need is a terminal on the machine you want to check.
 
 ## 📖 User guide
 
-Full guide (what happened, how to audit, how to update, a real case, PHP2Shell, routine): **https://inematds.github.io/auditoria-seguranca/guia/en/**
+Full guide (what happened, how to audit, how to update, real case, PHP2Shell, routine): **https://inematds.github.io/auditoria-seguranca/guia/en/**
 
 ## 10-second test
 
 ```bash
 curl https://dv-g3b-emudhra.we-have-a-problem.com/
 curl https://dv-g3b-aaa-emudhra.we-have-a-problem.com/
-# "SSL certificate problem" = protegido · mostrou a página = EXPOSTO
+# "SSL certificate problem" = protegido (protected) · page displayed = EXPOSTO (exposed)
 ```
 
-Your browser is already protected. Older curl, Python (certifi), Node, Go, Docker, n8n, and AI agents each ship their own certificate list and need their own fix.
+Your browser is already protected. Old curl, Python (certifi), Node, Deno, Bun, Java, Go, Docker, n8n, and AI agents each have their own certificate list (or follow the system's/container's) and need their own fix.
 
-## The `audita.sh` script (read-only)
+## The `audita.sh` script (read-only) — version 1.1.0
 
-It tests the **real connection** (not just a list of certificates) with curl, wget, every Node on disk (including embedded Node), the system Python, each venv with its own certifi, and every running Docker container. Three states: `EXPOSTO` (exposed: the connection succeeded), `protegido` (protected: certificate error), and `SEM TESTE` (not tested: network/DNS/timeout — does not count as protected).
+It tests the **real connection** (not just certificate lists) with curl, wget, every Node, Deno, and Bun on disk (including bundled ones), the system Python, every venv and conda environment with its own certifi, and every running Docker container. It also checks the Java list (`cacerts`, via `keytool`), the PHP version on the server and in containers (PHP2Shell), and the processes that need to be restarted. At the end, it groups what it found by type, with the suggested fix.
+
+States: `EXPOSTO` (exposed: it connected), `protegido` (protected: certificate error), `SEM TESTE` (not tested: network/DNS/timeout — does not count as protected), `VERIFIQUE` (check: a distribution PHP below the fixed version — verify the backport), and `REINICIE` (restart: a process running with the old program or list).
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/inematds/auditoria-seguranca/main/audita.sh
 less audita.sh                              # read it before running
 chmod +x audita.sh
 ./audita.sh                                 # this machine (up to 3 min)
-./audita.sh --rapido                        # skips the disk search
+./audita.sh --rapido                        # no disk search
+./audita.sh --comandos                      # lists the fix commands (does not run them)
+./audita.sh --go                            # real Go test (compiles in a temp folder, ~100 MB, deleted at the end)
 ./audita.sh --ssh root@servidor1 --ssh deploy@servidor2
+./audita.sh --chave ~/.ssh/minha_chave --ssh root@servidor1
 ./audita.sh --hosts servidores.txt          # one SSH target per line
 ```
 
-Exit code: `0` nothing exposed · `1` something is EXPOSTO · `2` a test did not run.
+Exit code: `0` nothing exposed · `1` there is an EXPOSTO · `2` some test did not run. The script never installs, changes, or fixes anything; it only writes to a temp folder that is deleted at the end.
 
 ## Fixed versions (eMudhra)
 
 | Layer | Version |
 |---|---|
-| Ubuntu | `20260816ubuntu0.<Ubuntu version>` (e.g. `20260816ubuntu0.24.04.1`) |
+| Ubuntu | `20260816ubuntu0.<Ubuntu version>` (e.g., `20260816ubuntu0.24.04.1`) |
 | Debian | `20250419~deb12u2` (12) · `20250419+deb13u1` (13) |
 | Alpine | `20261020-r0` |
 | Python | `certifi 2026.10.19` · `pip 26.2.2` · `uv 0.13.4` |
-| Node | `22.23.4` · `24.22.1` · `26.12.1` (no fix for Node 20) |
-| Go | `1.27.3` · `1.26.10` + recompile |
+| Node | `22.23.4` · `24.22.1` · `26.12.1` (Node 20 has no fix) |
+| Go | `1.27.3` · `1.26.10` + recompile (on Linux it follows the system list) |
+| Java | `sudo update-ca-certificates -f` (rebuilds `cacerts`) or a new JDK |
+| Deno · Bun | rejected in our test: `2.9.8` · `1.4.4` |
 | Firefox / NSS | `158.0.1` · `3.131.1` |
 | Electron | `44.9.1` · `43.8.1` · `42.11.16` |
 | Rust | `rustls-webpki 0.103.16` · `webpki-roots 1.0.10` |
@@ -61,16 +68,18 @@ Exit code: `0` nothing exposed · `1` something is EXPOSTO · `2` a test did not
 | # | Step | Command | Who |
 |---|---|---|---|
 | 1 | Quick curl test on both chains | `curl https://dv-g3b-emudhra.we-have-a-problem.com/` | 🧠 you |
-| 2 | Full audit of the machine | `./audita.sh` | ⚙️ script |
-| 3 | Audit your servers | `./audita.sh --hosts servidores.txt` | ⚙️ script |
-| 4 | Update the system | `sudo apt install --only-upgrade ca-certificates` | 🧠 you |
-| 5 | Update certifi in each venv | `<venv>/bin/python -m pip install -U certifi pip` | 🧠 you |
-| 6 | Replace Node (20 → 22/24) | `nvm install 22` or the NodeSource repository `setup_22.x` | 🧠 you |
-| 7 | Rebuild containers / update n8n (with a backup) | `docker compose build --pull` / `docker compose pull` | 🧠 you |
-| 8 | Restart services | `systemctl restart …` · `pm2 restart all` · `docker compose up -d` | 🧠 you |
-| 9 | Audit again until it's clean | `./audita.sh` → `0 EXPOSTO · 0 SEM TESTE` | ⚙️ script |
-| 10 | PHP: test, update, restart workers | `node phpcheck.js https://seusite` · `apt install --only-upgrade 'php*'` | 🧠 you |
-| 11 | Monthly routine | checklist in the Routine section of the guide | 🧠 you |
+| 2 | Full audit of the machine, with the list of fixes | `./audita.sh --comandos` | ⚙️ script |
+| 3 | Audit the servers | `./audita.sh --hosts servidores.txt` | ⚙️ script |
+| 4 | Update the system (and Java's `cacerts`) | `sudo apt install --only-upgrade ca-certificates` · `sudo update-ca-certificates -f` | 🧠 you |
+| 5 | Update certifi in each venv / conda | `<venv>/bin/python -m pip install -U certifi` · `uv pip install --python <venv>/bin/python -U certifi` | 🧠 you |
+| 6 | Replace Node (20 → 22/24), update Deno and Bun | `nvm install 22` · `sudo apt install --only-upgrade nodejs` · `deno upgrade` · `bun upgrade` | 🧠 you |
+| 7 | Containers by group: A pull and recreate · B layer on top · C bump the version / Supabase | `docker compose up -d --pull always <svc>` · `FROM <img>:pre-emudhra` · `supabase stop && supabase start` | 🧠 you |
+| 8 | Find and restart services (outside of jobs/uploads/lives) | the script's `processos a reiniciar` (processes to restart) section · `systemctl restart …` · `pm2 restart all` | 🧠 you |
+| 9 | Audit again until it reaches zero | `./audita.sh` → `0 EXPOSTO · 0 SEM TESTE` | ⚙️ script |
+| 10 | PHP: test, update, restart workers (server and containers) | `node phpcheck.js https://seusite` · `apt install --only-upgrade 'php*'` | 🧠 you |
+| 11 | Monthly routine | checklist in the guide's Routine section | 🧠 you |
+
+The version history is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Sources
 
