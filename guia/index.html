@@ -204,7 +204,7 @@
 <span class="c"># "SSL certificate problem" = protegido</span>
 <span class="c"># mostrou a página        = EXPOSTO</span></pre></div>
     <div class="card"><h3>Node e Python, do mesmo jeito</h3>
-<pre><span class="k">node</span> -e <span class="s">"require('https').get('https://dv-g3b-emudhra.we-have-a-problem.com/',r=>{console.log('EXPOSTO');process.exit()}).on('error',e=>{console.log(/CERT|ISSUER/.test(e.code)?'protegido':'SEM TESTE',e.code);process.exit()})"</span>
+<pre><span class="k">node</span> -e <span class="s">"require('https').get('https://dv-g3b-emudhra.we-have-a-problem.com/',r=>{console.log('EXPOSTO');process.exit()}).on('error',e=>{console.log(/CERT|ISSUER|UNABLE_TO|SELF_SIGNED|DEPTH_ZERO|ERR_TLS/.test(e.code)?'protegido':'SEM TESTE',e.code);process.exit()})"</span>
 
 <span class="k">python3</span> -c <span class="s">"import ssl,urllib.request as u,urllib.error as E
 try:
@@ -276,9 +276,9 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
      1  Deno
         ex.: ~/.deno/bin/deno (2.7.14)
         → ~/.deno/bin/deno upgrade
-     1  containers de tag flutuante (grupo A: puxar e recriar)
+     1  containers de versão fixada (grupo C: subir a versão)
         ex.: n8n (n8nio/n8n:2.4.8)
-        → cd ~/n8n && docker compose up -d --pull always n8n
+        → versão fixada: puxar a mesma tag não corrige; suba a versão (compose/config) para uma lançada depois de 21/10/2026
      1  processos a reiniciar (fora de job, upload ou live)
         ex.: meubot.service (sistema)
         → sudo systemctl restart meubot.service</pre>
@@ -291,7 +291,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
       <li><b>REINICIE</b>: processo que começou antes da correção e ainda usa o programa ou a lista antiga. Veja <a href="#reiniciar">quem reiniciar</a>.</li>
     </ul>
     <p>No fim vem o bloco <b>o que corrigir, por tipo</b>: quantos itens de cada tipo, um exemplo e o comando sugerido. O resumo conta linhas (cada ferramenta aparece duas vezes, G3 e AAA); o bloco conta itens. Com <code>--comandos</code> sai a lista completa, um comando por item, para você revisar e rodar um por um. O script nunca executa a correção.</p>
-    <p>Código de saída: <code>0</code> nada exposto, <code>1</code> há EXPOSTO, <code>2</code> há teste que não rodou. Dá para usar em monitoramento.</p>
+    <p>Código de saída: <code>0</code> tudo zerado, <code>1</code> há EXPOSTO, <code>2</code> há teste que não rodou, <code>3</code> nada conecta, mas falta reiniciar processos ou conferir o PHP. Dá para usar em monitoramento.</p>
   </div></div>
 
   <div class="step"><div class="b">4</div><div>
@@ -308,7 +308,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 
   <div class="step"><div class="b">5</div><div>
     <h3>Corrija, reinicie e rode de novo</h3>
-    <p>A auditoria só termina quando o resumo mostra <code>0 EXPOSTO · 0 SEM TESTE</code> em todas as máquinas. Processo que já estava rodando guarda a lista antiga na memória: atualizar sem reiniciar não resolve.</p>
+    <p>A auditoria só termina quando o resumo mostra <code>0 EXPOSTO · 0 SEM TESTE · 0 VERIFIQUE · 0 REINICIE</code> (saída 0) em todas as máquinas, numa passada completa (sem <code>--rapido</code>). Processo que já estava rodando guarda a lista antiga na memória: atualizar sem reiniciar não resolve.</p>
   </div></div>
 </div></section>
 
@@ -318,7 +318,19 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
   <h2>Atualizar o sistema não basta</h2>
   <p class="sub">Cada ferramenta pode ter a própria lista de certificados confiáveis. O <code>ca-certificates</code> do sistema protege o curl e quem usa a lista do sistema. Node, Python com certifi, Go, Electron, Rust e cada container têm a sua.</p>
 
-  <div class="tabwrap"><table class="tab">
+    <div class="nota red" id="antes-depois" style="margin:0 0 26px">
+    <h3 style="margin-top:0">⚠ Antes de atualizar qualquer coisa: backup e saúde. Depois: teste e valide.</h3>
+    <p><b>Antes.</b> Faça backup do que não volta: banco, volumes, a imagem antiga com uma tag de reserva e a configuração. E confira que o sistema está saudável <b>agora</b>, para saber comparar depois.</p>
+<pre><span class="k">docker exec meu-postgres pg_dumpall -U postgres > backup-$(date +%F).sql</span>   <span class="c"># banco</span>
+<span class="k">docker tag meuapp:latest meuapp:pre-update</span>                              <span class="c"># imagem antiga de reserva</span>
+<span class="k">docker inspect meuapp > meuapp.inspect.json</span>                             <span class="c"># portas, env, volumes</span>
+<span class="k">sudo tar czf config-$(date +%F).tgz /etc/nginx /caminho/do/app/.env</span>       <span class="c"># configuração</span>
+<span class="k">curl -fsS https://meusite/health && echo OK</span>                             <span class="c"># saúde antes</span>
+<span class="k">docker exec meu-postgres psql -U postgres -d app -c "select count(*) from clientes"</span>   <span class="c"># anote os números</span></pre>
+    <p><b>Depois.</b> Muita coisa que rodava pode ficar incompatível com a versão nova. Nós vimos uma dependência sem trava quebrar um app, um venv ressincronizar e desfazer a correção, e um proxy guardar o endereço antigo e responder 502. Então teste e valide: o serviço subiu, responde, faz o que fazia e os dados estão lá (mesmas contagens). Só dê por encerrado quando estiver ok <b>e no ar</b>.</p>
+  </div>
+
+<div class="tabwrap"><table class="tab">
     <tr><th>Camada</th><th>Versão corrigida</th><th>Onde a lista mora</th></tr>
     <tr><td>Ubuntu</td><td><code>20260816ubuntu0.&lt;versão do Ubuntu&gt;</code> (ex.: <code>20260816ubuntu0.24.04.1</code>)</td><td>sistema</td></tr>
     <tr><td>Debian</td><td><code>20250419~deb12u2</code> (Debian 12) · <code>20250419+deb13u1</code> (Debian 13)</td><td>sistema</td></tr>
@@ -402,7 +414,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 <span class="k">sudo cp -a /etc/ssl/certs/java/cacerts /etc/ssl/certs/java/cacerts.bak</span>
 <span class="k">sudo keytool -delete -alias debian:emsign_ecc_root_ca_-_g3.pem -keystore /etc/ssl/certs/java/cacerts -storepass changeit</span>
 <span class="k">sudo keytool -delete -alias debian:comodo_aaa_services_root.pem -keystore /etc/ssl/certs/java/cacerts -storepass changeit</span></pre>
-    <div class="nota"><b>Só <code>update-ca-certificates -f</code> não basta.</b> No nosso teste ele regravou o arquivo, mas as duas raízes continuaram lá, mesmo com o sistema já corrigido. Por isso a remoção é feita à mão, com o <code>keytool -delete</code> acima. Os nomes (<code>debian:…</code>) são os do Debian/Ubuntu; em outro JDK, use o nome que o <code>keytool -list</code> mostrar. Depois rode o teste de novo: tem que dar <code>limpo</code>.</div>
+    <div class="nota"><b>Só <code>update-ca-certificates -f</code> não basta.</b> No nosso teste ele regravou o arquivo, mas as duas raízes continuaram lá, mesmo com o sistema já corrigido. Por isso a remoção é feita à mão, com o <code>keytool -delete</code> acima. Os nomes (<code>debian:…</code>) são os do Debian/Ubuntu; em outro JDK, use o nome que o <code>keytool -list</code> mostrar. Depois rode o teste de novo: tem que dar <code>limpo</code>. O sistema corrigido já tirou essas duas raízes da lista dele; o <code>cacerts</code> só ficou para trás. Se algum site parar de abrir num programa Java depois disso, atualize o JDK e o <code>ca-certificates-java</code> em vez de devolver a raiz. Lembre: no Java o <code>audita.sh</code> confere a lista, não faz conexão.</div>
     <p>JDK com <code>cacerts</code> próprio (baixado à parte, dentro de uma IDE, num <code>/opt</code>): atualize o JDK. <code>changeit</code> é a senha padrão do arquivo, pública; ela só protege contra gravação acidental. Depois, reinicie os programas Java.</p>
   </div></div>
 
@@ -427,6 +439,8 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
       <div class="card"><h3>C · Versão fixada</h3><p><code>kong:2.8.1</code>, <code>gotrue:v2.197.0</code>. Puxar a mesma tag de novo não muda nada: é preciso subir a versão, e às vezes esperar o fornecedor.</p></div>
     </div>
 
+    <p>Container sem curl, wget, Node ou Python (ex.: <code>postgres:16</code> Debian) aparece como "nenhuma ferramenta de rede": o script não tem como testar a conexão. Confira a lista pelo pacote (<code>docker exec &lt;c&gt; dpkg-query -W ca-certificates</code> ou <code>apk list -I ca-certificates-bundle</code>) e compare com a tabela de versões.</p>
+
     <h3 style="margin-top:22px">Grupo A: puxe e recrie</h3>
 <pre><span class="k">docker compose up -d --pull always redis</span>      <span class="c"># um serviço; repita para os outros</span>
 <span class="k">docker compose pull && docker compose up -d</span>   <span class="c"># todos de uma vez</span>
@@ -446,16 +460,20 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 
 <span class="c"># 2) Dockerfile.emudhra</span>
 <span class="k">FROM</span> meuapp:pre-emudhra
-<span class="k">COPY</span> --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node   <span class="c"># só se a imagem tem Node; mesma distro da base</span>
+<span class="k">USER</span> root                                                                       <span class="c"># instalar exige root</span>
+<span class="k">COPY</span> --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node   <span class="c"># só se a imagem tem Node 22; mesma versão principal e mesma distro da base</span>
 <span class="k">RUN</span> apt-get update && apt-get install -y --only-upgrade ca-certificates && rm -rf /var/lib/apt/lists/*
 <span class="c"># Alpine: RUN apk add -u ca-certificates ca-certificates-bundle</span>
-<span class="k">RUN</span> pip install -U certifi || true                                             <span class="c"># se tem Python</span>
+<span class="k">RUN</span> python3 -m pip install -U certifi                                           <span class="c"># se o app tem Python com pip próprio</span>
+<span class="k">USER</span> app                                                                        <span class="c"># volte ao usuário original (veja: docker inspect -f '{{.Config.User}}' meuapp:pre-emudhra)</span>
 
 <span class="c"># 3) construa por cima e recrie</span>
 <span class="k">docker build -f Dockerfile.emudhra -t meuapp:latest .</span>
 <span class="k">docker compose up -d meuapp</span>
 <span class="c"># deu errado? volte: docker tag meuapp:pre-emudhra meuapp:latest && docker compose up -d meuapp</span></pre>
     <ul>
+      <li>O Node copiado tem que ter a <b>mesma versão principal</b> do que já está na imagem (22 por 22): módulos nativos (<code>.node</code>) feitos para o Node 20 não carregam no 22. Imagem em Node 20 não tem como ser corrigida assim; ela precisa ser reconstruída com base 22.</li>
+      <li>Se o <code>pip</code> recusar com <code>externally-managed-environment</code>, o Python é o do sistema da imagem (apt): o <code>ca-certificates</code> atualizado já cobre esse Python. Tire a linha do pip; não use <code>|| true</code>, que esconde o erro.</li>
       <li>O <code>node:22-…</code> do <code>COPY</code> tem que ser da mesma família da base (<code>bookworm</code> com Debian 12, <code>alpine</code> com Alpine), senão o binário não roda.</li>
       <li>App que sobe com <code>uv run</code>: o uv ressincroniza o venv pelo <code>uv.lock</code> e desfaz o certifi novo. Suba o certifi no lock, ou troque só o arquivo <code>cacert.pem</code> do certifi travado pelo da lista nova.</li>
       <li>Tem um nginx na frente (proxy)? Depois de recriar o app, reinicie o nginx também: ele guarda o endereço interno antigo e passa a responder 502.</li>
@@ -471,7 +489,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 <span class="c"># 2) CLI nova + parar e subir (na pasta do projeto; sem --no-backup, que apagaria os dados)</span>
 <span class="k">npx -y supabase@latest stop && npx -y supabase@latest start</span>
 <span class="c"># 3) teste de novo</span>
-<span class="k">./audita.sh --rapido</span></pre>
+<span class="k">./audita.sh</span>                       <span class="c"># completo: o --rapido não acha venvs nem quem reiniciar</span></pre>
     <ul>
       <li>Nunca remova os containers do Supabase à mão (<code>docker rm</code>): use a CLI.</li>
       <li>No nosso teste, a CLI nova trouxe imagens novas, mas 10 de 12 containers continuaram EXPOSTOS: só algumas imagens já vinham corrigidas. Enquanto o fornecedor não reconstruir, não há o que fazer além de esperar e testar de novo.</li>
@@ -489,8 +507,12 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 <span class="c"># 2) pare o n8n e faça o backup (com ele parado o banco não sai pela metade)</span>
 <span class="k">docker compose stop n8n</span>
 <span class="k">docker run --rm -v meuprojeto_n8n_data:/data -v "$PWD":/bk alpine tar czf /bk/n8n-backup.tgz -C /data .</span>
-<span class="c"># 3) atualize</span>
-<span class="k">docker compose pull n8n && docker compose up -d n8n</span></pre>
+<span class="c"># 3) se o compose fixa a versão (image: n8nio/n8n:2.4.8), troque pela atual antes:</span>
+<span class="c">#    image: n8nio/n8n:2.44.6   (ou mais nova; confira as notas de versão)</span>
+<span class="c"># 4) atualize</span>
+<span class="k">docker compose pull n8n && docker compose up -d n8n</span>
+<span class="k">docker exec n8n node -v</span>                     <span class="c"># confirme o Node novo</span></pre>
+    <p>Sem trocar a tag fixada, o <code>pull</code> traz a mesma imagem e nada muda.</p>
     <div class="nota"><b>Armadilha do docker-compose antigo (1.29):</b> ao subir a imagem nova ele pode falhar com <code>KeyError: 'ContainerConfig'</code> e deixar o n8n parado. Remova o container antigo antes (os dados ficam no volume): <code>docker-compose rm -f -s n8n && docker-compose up -d n8n</code>. Melhor ainda: migre para o <code>docker compose</code> v2.</div>
     <p>Outros jeitos de guardar os dados: se o n8n usa uma pasta montada (ex.: <code>./n8n_data</code> ou <code>~/.n8n</code>), copie a pasta com ele parado; se usa Postgres, faça o <code>pg_dump</code> do banco. Em todos os casos guarde junto a chave de criptografia (<code>N8N_ENCRYPTION_KEY</code> ou o arquivo <code>config</code> da pasta do n8n): sem ela as credenciais salvas não voltam.</p>
     <p>Depois de atualizar, olhe o log (<code>docker compose logs n8n</code>). Saltos grandes de versão podem trazer avisos novos, como o do executor de Python do nó Code.</p>
@@ -527,6 +549,10 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
     <p>Atenção: <code>docker compose restart</code> só reinicia o mesmo container, com a imagem velha. Depois de <code>pull</code> ou <code>build</code>, o certo é <code>docker compose up -d</code>.</p>
     <p>E rode o <code>audita.sh</code> de novo.</p>
   </div></div>
+  <div class="nota red" style="margin-top:34px">
+    <h3 style="margin-top:0">⚠ Antes de dar por encerrado: valide</h3>
+    <p>Atualizou? Confira, serviço por serviço: subiu (<code>docker compose ps</code>, <code>systemctl status</code>), responde (<code>curl -fsS https://meusite/health</code>), faz o que fazia (abra, faça login, rode um fluxo) e os dados estão lá (as mesmas contagens de antes). Deu errado: volte com o backup (<code>docker tag meuapp:pre-update meuapp:latest && docker compose up -d meuapp</code>). E rode o <code>audita.sh</code> de novo. Só termina quando estiver ok <b>e no ar</b>.</p>
+  </div>
 </div></section>
 
 <!-- ===================================================== CASO REAL -->
@@ -537,7 +563,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
   <div class="grid g3">
     <div class="card ok"><h3>O que já estava certo</h3><p>O <code>ca-certificates</code> dos 6 servidores já estava corrigido pela atualização automática. O curl recusava as cadeias ruins.</p></div>
     <div class="card red"><h3>O que continuava exposto</h3><p>Node, ambientes Python (certifi) e containers, inclusive o n8n, seguiam confiando nas chaves quebradas.</p></div>
-    <div class="card"><h3>O que corrigimos</h3><ul><li>Node 20 → 22</li><li>certifi dos ambientes Python</li><li>Node embutido de um agente</li><li>n8n 2.4.8 → 2.44.6 (com backup)</li><li>4 containers reconstruídos</li></ul></div>
+    <div class="card"><h3>O que corrigimos</h3><ul><li>Node 20 → 22</li><li>certifi dos ambientes Python</li><li>Node embutido de um agente</li><li>n8n 2.4.8 → 2.44.6 (com backup)</li><li>4 containers atualizados (imagem nova e recriação)</li></ul></div>
   </div>
   <h3 class="bloco">Duas armadilhas de infraestrutura</h3>
   <div class="grid g2">
@@ -693,7 +719,7 @@ php_admin_flag[fatal_error_backtraces] = off</pre>
 <pre><span class="k">dig CAA seudominio.com.br +short</span></pre></div>
     <div class="card"><h3>⚙️ CI/CD e segredos</h3><ul>
       <li>Reconstrua as imagens no pipeline com <code>--pull</code>: imagem velha em cache traz lista velha.</li>
-      <li>Rode o <code>audita.sh</code> como etapa do deploy; saída diferente de 0 barra o deploy.</li>
+      <li>Rode o <code>audita.sh</code> como etapa do deploy; saída <code>1</code> ou <code>2</code> barra o deploy (<code>3</code> pede reinício).</li>
       <li>Nada de chave no código ou no git (<code>.env</code> fora do repositório); se uma chave vazou, troque, não só apague.</li>
       <li>Para sites, o método <a href="https://inematds.github.io/blinda-site/guia/" target="_blank" rel="noopener">blinda-site</a> do INEMA olha cabeçalhos, dependências, segredos e banco com um agente de IA, sem tocar no site no ar.</li>
     </ul></div>
@@ -715,6 +741,8 @@ php_admin_flag[fatal_error_backtraces] = off</pre>
     <div class="card"><h3>pm2 · systemd</h3><p>Gerenciadores que mantêm programas rodando no servidor e os reiniciam.</p></div>
     <div class="card"><h3>cacerts · keystore</h3><p>Arquivo onde o Java guarda as certificadoras em que confia. Cada JDK pode ter o seu; o <code>keytool</code> mostra o que tem dentro.</p></div>
     <div class="card"><h3>Tag flutuante · fixada</h3><p>O nome depois dos dois pontos na imagem Docker. Flutuante (<code>latest</code>, <code>alpine</code>) muda de conteúdo com o tempo; fixada (<code>2.8.1</code>) não muda nunca.</p></div>
+    <div class="card"><h3>Cadeia cruzada</h3><p>Quando uma certificadora também é assinada por outra raiz mais antiga, para funcionar em aparelhos velhos. Aqui: a cadeia da eMudhra também passa pela raiz <code>AAA Certificate Services</code>.</p></div>
+    <div class="card"><h3>busybox</h3><p>Conjunto mínimo de comandos (sh, wget…) usado em imagens pequenas como Alpine. O <code>wget</code> dele mostra erros diferentes do wget comum.</p></div>
     <div class="card"><h3>CVE</h3><p>Número público de uma falha de segurança, usado para procurar a correção (ex.: <code>CVE-2026-109618</code>).</p></div>
   </div>
 </div></section>

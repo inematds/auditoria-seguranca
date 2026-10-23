@@ -15,12 +15,17 @@ Lições da correção de uma máquina de desenvolvimento (134 EXPOSTO → quase
 - Resumo agrupado por tipo com a correção sugerida; `--comandos` lista os comandos (nunca executa).
 - Cada REINICIE diz o que reiniciar: unidade do sistema, unidade `--user` ou processo avulso (nunca o `user@NNNN.service`); os reinícios entram no resumo e no `--comandos`.
 - Java: a correção sugerida é `keytool -delete` das duas raízes (com backup); `update-ca-certificates -f` sozinho regrava o arquivo mas não as tira.
+- PHP de pacote da distribuição (dpkg/apk/rpm) vira `VERIFIQUE`, mesmo sem sufixo no `php -v` (backport não muda o número).
+- Saída `3`: nada conecta, mas falta REINICIE/VERIFIQUE. Processos Java iniciados antes da mudança no `cacerts` entram em REINICIE.
+- Tag `X.Y-alpine` conta como flutuante; só `X.Y.Z` exato (ou data) é fixada. Aviso para rodar correções de outros usuários como o dono.
 - `--chave` para usar uma chave SSH específica; `--versao`.
 - wget do busybox: recusa ambígua ("ssl_client"/"reset by peer") é confirmada contra um site bom.
 - Testes em Node/Python saem com códigos próprios: um travamento vira `SEM TESTE`, nunca "protegido".
 - Comparação de versão em sh puro (há containers sem `awk` nem `sort -V`).
 
 ### Guia (PT/EN/ES)
+- Chamada "antes e depois de atualizar" no topo e no fim de Como atualizar (e nos README): backup, saúde antes, testar e validar depois.
+- n8n: trocar a tag fixada antes do pull. Camada por cima com `USER root`, mesma versão principal do Node, sem `|| true` no pip.
 - Novos passos: Java (cacerts, com `keytool -delete`), Deno e Bun, reinício com "quem reiniciar" e aviso para não reiniciar no meio de job.
 - Docker reescrito: os 3 grupos, a camada por cima da imagem antiga (`:pre-emudhra`), Supabase local (backup, CLI nova, testar de novo, esperar o fornecedor), armadilhas (uv.lock, proxy nginx 502, compose 1.29, busybox wget).
 - Go: no Linux segue a lista do sistema (teste com lista antiga).

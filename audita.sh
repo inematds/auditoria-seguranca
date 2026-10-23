@@ -28,7 +28,7 @@
 #   ./audita.sh --versao
 #
 # Nada é instalado, alterado ou executado como correção. Arquivos só em pasta temporária apagada no fim.
-# Saída: 0 = nenhum EXPOSTO; 1 = há EXPOSTO; 2 = há SEM TESTE.
+# Saída: 0 = tudo zerado; 1 = há EXPOSTO; 2 = há SEM TESTE; 3 = só falta REINICIE/VERIFIQUE.
 set -uo pipefail
 
 VERSAO=1.1.0
@@ -58,7 +58,7 @@ if [ ${#ALVOS[@]} -gt 0 ]; then
     [ $COMANDOS = 1 ] && flags+=(--comandos); [ $GO = 1 ] && flags+=(--go)
     ssh -o BatchMode=yes -o ConnectTimeout=10 ${SSH_OPTS[@]+"${SSH_OPTS[@]}"} "$a" "bash -s -- --local ${flags[*]-}" < "$0"; rc=$?
     [ $rc = 255 ] && { echo "SEM TESTE  ssh  não conectou em $a"; rc=2; }
-    [ $rc = 1 ] && pior=1; [ $rc = 2 ] && [ $pior = 0 ] && pior=2
+    [ $rc = 1 ] && pior=1; [ $rc = 2 ] && [ $pior != 1 ] && pior=2; [ $rc = 3 ] && [ $pior = 0 ] && pior=3
     echo
   done
   exit $pior
@@ -168,13 +168,20 @@ java_achar(){
     done
   done | sort -u -k1,1; }
 # PHP2Shell: versão do php; corrigido em 8.5.12 · 8.4.27 · 8.3.36 · 8.2.35
+# o php veio de pacote da distribuição (dpkg/apk/rpm)? Aí o número não muda com o backport: VERIFIQUE, não EXPOSTO
+de_pacote(){ f=$(readlink -f "$1" 2>/dev/null || echo "$1")
+  if command -v dpkg >/dev/null 2>&1 && dpkg -S "$f" >/dev/null 2>&1; then dpkg -S "$f" 2>/dev/null | head -1 | cut -d: -f1; return 0; fi
+  if command -v apk >/dev/null 2>&1; then o=$(apk info --who-owns "$f" 2>/dev/null | sed -n 's/.* owned by //p'); [ -n "$o" ] && { echo "$o"; return 0; }; fi
+  if command -v rpm >/dev/null 2>&1 && rpm -qf "$f" >/dev/null 2>&1; then rpm -qf "$f"; return 0; fi
+  return 1; }
 php_ver(){ bin=$1; rot=$2; l=$("$bin" -v 2>/dev/null | head -1); ULT=1
   v=$(echo "$l" | sed -n 's/^PHP \([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p'); [ -n "$v" ] || return 0
   suf=$(echo "$l" | sed -n 's/^PHP [0-9.]*\([^ ]*\).*/\1/p')
+  pk=$(de_pacote "$(command -v "$bin" 2>/dev/null || echo "$bin")") && [ -z "$suf" ] && suf=" (pacote $pk)"
   case "$v" in 8.5.*) m=8.5.12;; 8.4.*) m=8.4.27;; 8.3.*) m=8.3.36;; 8.2.*) m=8.2.35;; *) m=;; esac
   if [ -n "$m" ] && vge "$v" "$m"; then linha 1 "$rot $v$suf" PHP "PHP2Shell: versão corrigida"
   elif [ -z "$m" ] && vge "$v" 8.6; then linha 1 "$rot $v$suf" PHP "PHP2Shell: versão posterior às corrigidas"
-  elif [ -n "$suf" ]; then ULT=4; linha 4 "$rot $v$suf" PHP "abaixo de ${m:-8.2.35}: pacote de distribuição, confira o backport no changelog"
+  elif [ -n "$suf" ]; then ULT=4; linha 4 "$rot $v$suf" PHP "abaixo de ${m:-8.2.35}: pacote da distribuição, confira o backport (CVE-2026-109618) no changelog"
   elif [ -z "$m" ]; then ULT=0; linha 0 "$rot $v" PHP "PHP2Shell: linha sem suporte — suba para 8.2+ corrigido"
   else ULT=0; linha 0 "$rot $v" PHP "PHP2Shell: atualize para $m+"; fi; }
 cainfo(){ # versão da lista do sistema (só informação, para provar a correção)
@@ -392,7 +399,7 @@ cont_cmd(){ c=$1
     else echo "recriar	$c ($img)	recrie $c com a mesma imagem $img (salve antes: docker inspect $c > $c.inspect.json; confira portas, env e .Mounts)"; fi
   elif [ "${dig:-0}" = 0 ]; then
     echo "local	$c ($img)	imagem construída aqui: use a camada por cima da imagem antiga (guia, seção Containers): docker tag $img ${img%:*}:pre-emudhra; FROM ${img%:*}:pre-emudhra + ca-certificates/certifi/node novos"
-  elif echo "$tag" | grep -qE '^v?[0-9]+\.[0-9]+'; then
+  elif echo "$tag" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+|^[0-9]{4}\.[0-9]{2}\.[0-9]{2}'; then   # X.Y.Z exato ou data: fixada (X.Y-alpine recebe patch: flutuante)
     echo "fixada	$c ($img)	versão fixada: puxar a mesma tag não corrige; suba a versão (compose/config) para uma lançada depois de 21/10/2026"
   elif [ -n "$svc" ]; then
     echo "flutuante	$c ($img)	${ondecompose}docker compose up -d --pull always $svc   # se continuar EXPOSTO: o fornecedor ainda não atualizou; use a camada local"
@@ -445,6 +452,10 @@ while read -r pid et args; do
   b=$(basename "${exe% (deleted)}")
   motivo=""
   case "$exe" in *" (deleted)") case "$b" in node*|deno|bun|java|php*) motivo="o binário foi atualizado depois que o processo começou";; esac;; esac
+  if [ -z "$motivo" ] && [ "$b" = java ]; then
+    for j in ${JKS[@]+"${JKS[@]}"}; do k=${j%%|*}
+      [ $((agora - et)) -lt "$(stat -c %Y "$k" 2>/dev/null || echo 0)" ] && motivo="Java que começou antes da mudança no $(curto "$k")"; done
+  fi
   if [ -z "$motivo" ]; then
     for n in ${EXP_NODES[@]+"${EXP_NODES[@]}"}; do [ "$exe" = "$n" ] && motivo="usa $(basename "$n") ainda EXPOSTO (corrija antes)"; done
     for v in ${PYS[@]+"${PYS[@]}"}; do d=${v%/bin/python}
@@ -490,6 +501,8 @@ if [ ${#ACH[@]} -gt 0 ]; then
     printf '%s\n' "${ACH[@]}" | awk -F'\t' '!s[$3]++{print "# " $2; print $3}' | sed 's/^/   /'
   else echo "   (use --comandos para ver a lista de comandos de correção, sem executar)"; fi
 fi
+[ "$(id -u)" = 0 ] && [ ${#ACH[@]} -gt 0 ] && echo "   Rodando como root: corrija venvs, Deno e Bun de outros usuários COMO O DONO (sudo -u <usuário> …), senão os arquivos ficam com dono root."
 [ $N_EXP -gt 0 ] && { echo "   Há ferramenta que ainda confia nas chaves comprometidas (ou PHP vulnerável): corrija, reinicie e rode de novo."; exit 1; }
 [ $N_SEM -gt 0 ] && { echo "   Alguns testes não rodaram (rede/DNS/timeout). Repita antes de concluir."; exit 2; }
+[ $((N_REI + N_VER)) -gt 0 ] && { echo "   Nada conecta, mas falta reiniciar processos e/ou conferir o PHP: só termina com tudo zerado."; exit 3; }
 exit 0
