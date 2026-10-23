@@ -151,7 +151,7 @@
   <div class="wrap">
     <div>
       <span class="chip">Critical · eMudhra + PHP2Shell · October 2026</span>
-      <p class="versao">Guide <b>v<span data-v="versao">1.1.1</span></b> · updated on <span data-v="data">10/23/2026</span></p>
+      <p class="versao">Guide <b>v<span data-v="versao">1.1.2</span></b> · updated on <span data-v="data">10/23/2026</span></p>
       <h1>Update and <span class="amb">audit</span> your systems today</h1>
       <p class="lead">Your browser already protects you. Your server, your Python, your Node, your containers, and your n8n might not. Here is how to really test them and how to fix each layer.</p>
       <div class="cta">
@@ -222,8 +222,8 @@ except Exception as e: print('protegido' if 'CERTIFICATE_VERIFY_FAILED' in str(e
 
   <div class="nota red"><b>Test both chains.</b> In our audit, several tools rejected the <code>AAA</code> chain and accepted the <code>G3</code> chain (or the other way around). A single test can give a false sense of security. And a network error (DNS, timeout) is <b>not</b> "protected": it's "no test".</div>
 
-  <h3 class="bloco">The <code>audita.sh</code> script: everything at once, read-only</h3>
-  <p class="mut" style="max-width:70ch">It tests the real connection with curl, wget, every Node, Deno, and Bun found on disk (including the ones bundled inside tools), the system Python, every Python environment (venv) with its own certifi, and, from the inside, every running Docker container. It checks the Java list (the <code>cacerts</code> file), the PHP version on the server and in containers (PHP2Shell), outdated certifi, and processes that need to be restarted. At the end, it groups what it found by type, with the fix for each. It doesn't install, change, or fix anything.</p>
+  <h3 class="bloco">The <code>audita.sh</code> script: everything at once, changes nothing</h3>
+  <p class="mut" style="max-width:70ch">It tests the real connection with curl, wget, every Node, Deno, and Bun found on disk (including the ones bundled inside tools), the system Python, every Python environment (venv) with its own certifi, and, from the inside, every running Docker container. It checks the Java list (the <code>cacerts</code> file), the PHP version on the server and in containers (PHP2Shell), outdated certifi, and processes that need to be restarted. At the end, it groups what it found by type, with the fix for each. It doesn't install, change, or fix anything, but it <b>runs</b> the tools it tests (that's how it proves the connection). It's a survey: it points out problems; it doesn't certify that the machine is safe.</p>
 
   <div class="step"><div class="b">1</div><div>
     <h3>Download the script and read it before running</h3>
@@ -242,9 +242,11 @@ except Exception as e: print('protegido' if 'CERTIFICATE_VERIFY_FAILED' in str(e
 <span class="k">./audita.sh</span> --rapido        <span class="c"># without searching the disk for venvs, Node, Deno, Bun, and JDKs</span>
 <span class="k">./audita.sh</span> --sem-docker    <span class="c"># doesn't enter the containers</span>
 <span class="k">./audita.sh</span> --comandos      <span class="c"># shows the fix commands (runs none of them)</span>
-<span class="k">./audita.sh</span> --go            <span class="c"># also tests Go for real (see below)</span></pre>
+<span class="k">./audita.sh</span> --go            <span class="c"># also tests Go for real (see below)</span>
+<span class="k">./audita.sh</span> --raiz /opt     <span class="c"># searches the disk only in this folder (repeat --raiz for several)</span></pre>
     <p>Two tests are not connection tests, and the script says so on the line. <b>Java</b>: it checks whether Java's trust file (<code>cacerts</code>) still has the two roots, because testing the connection would require compiling Java code. <b>Go</b>: the real test compiles a small program in a temporary folder (about 100 MB, deleted at the end). Since this writes to disk, it only runs with <code>--go</code>.</p>
     <p>With <code>sudo</code>, the Node installed by your user's nvm isn't on the default path; the disk search still finds it (don't use <code>--rapido</code> in that case).</p>
+    <div class="nota"><b>With <code>sudo</code>, the script doesn't run as root anything that someone else can swap.</b> A program found on disk (Node, Deno, Bun, a venv's Python, a JDK's <code>keytool</code>) only runs if the file, every link, and every folder on the path up to the root belong to root or to the owner and nobody else can write to them. A user's program runs <b>as that user</b> (<code>runuser</code>), never as root. Anything that doesn't pass becomes <code>SEM TESTE</code> (NO TEST), with the reason. Even so, run as root only on a machine you administer.</div>
   </div></div>
 
   <div class="step"><div class="b">3</div><div>
@@ -281,7 +283,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
         → ~/.deno/bin/deno upgrade
      1  containers de versão fixada (grupo C: subir a versão)
         ex.: n8n (n8nio/n8n:2.4.8)
-        → versão fixada: puxar a mesma tag não corrige; suba a versão (compose/config) para uma lançada depois de 21/10/2026
+        → versão fixada: a tag pode ter sido republicada com a base corrigida — salve o digest atual, puxe a mesma tag e recrie; se o digest não mudou ou seguir EXPOSTO, suba a versão
      1  processos a reiniciar (fora de job, upload ou live)
         ex.: meubot.service (sistema)
         → sudo systemctl restart meubot.service</pre>
@@ -289,12 +291,13 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
     <ul>
       <li><b>EXPOSTO</b> (EXPOSED): it connected (or, in Java, the list still has the roots; in PHP, the version is vulnerable). Fix that layer (<a href="#atualizar">Update</a> section).</li>
       <li><b>protegido</b> (protected): it refused with a certificate error.</li>
-      <li><b>SEM TESTE</b> (NO TEST): it couldn't be tested (network, DNS, timeout). Repeat before concluding.</li>
-      <li><b>VERIFIQUE</b> (CHECK): PHP below the fixed version, but with a distribution version number (it may have the fix through a backport). On Debian/Ubuntu the script already looks for the CVE in the package's local changelog; if it doesn't find it, check with <code>apt changelog &lt;package&gt; | grep CVE-2026-109618</code>. Checked and fixed? Run with <code>--php-ok</code> and VERIFIQUE stops holding up the exit code.</li>
+      <li><b>SEM TESTE</b> (NO TEST): the test didn't finish or proves nothing. Network, DNS, timeout, a container without a shell or without the tool, truncated output, an SSH that failed, an interrupted disk search, a program that isn't safe to run, or busybox's wget with an ambiguous refusal (that only counts as protected if the system's certificate list doesn't have the root of that chain). It never counts as protected. Repeat it or test another way before concluding.</li>
+      <li><b>VERIFIQUE</b> (CHECK): PHP in a test version (RC, beta, dev: a higher number doesn't prove a fix) or below the fixed version, but with a distribution version number (it may have the fix through a backport). On Debian/Ubuntu the script already looks for the CVE in the package's local changelog; if it doesn't find it, check with <code>apt changelog &lt;package&gt; | grep CVE-2026-109618</code>. Checked and fixed? Run with <code>--php-ok</code> and VERIFIQUE stops holding up the exit code.</li>
       <li><b>REINICIE</b> (RESTART): a process that started before the fix and still uses the old program or list. See <a href="#reiniciar">what to restart</a>.</li>
     </ul>
     <p>At the end comes the <b>what to fix, by type</b> block: how many items of each type, an example, and the suggested command. The summary counts lines (each tool appears twice, G3 and AAA); the block counts items. With <code>--comandos</code> the full list comes out, one command per item, for you to review and run one by one. The script never runs the fix.</p>
-    <p>Exit code: <code>0</code> everything at zero, <code>1</code> there is EXPOSTO, <code>2</code> a test didn't run, <code>3</code> nothing connects, but processes still need to be restarted or PHP needs checking. You can use it for monitoring.</p>
+    <p>At the end there is also the <b>escopo desta rodada</b> (scope of this run) block: what was left out (<code>--rapido</code>, <code>--sem-docker</code>, <code>--raiz</code>, <code>--php-ok</code>, Go without <code>--go</code>, and which user it ran as).</p>
+    <p>Exit code: <code>0</code> the checks that were done passed, <b>within the printed scope</b>; <code>1</code> there is EXPOSTO; <code>2</code> there is SEM TESTE; <code>3</code> nothing connects, but processes still need to be restarted or PHP needs checking. Exit <code>0</code> doesn't mean the whole machine is safe. In monitoring, treat any exit other than 0 as an alert, and don't release an automatic deploy on exit 0 alone.</p>
   </div></div>
 
   <div class="step"><div class="b">4</div><div>
@@ -307,11 +310,12 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 
 <span class="c"># specific SSH key (applies to all destinations)</span>
 <span class="k">./audita.sh</span> --chave ~/.ssh/minha_chave --ssh root@servidor1</pre>
+    <p>If SSH doesn't connect or drops midway (timeout, <code>bash</code> missing there), the line says <code>SEM TESTE</code> (NO TEST) with the code and the exit is not 0: a server that didn't respond never passes as clean.</p>
   </div></div>
 
   <div class="step"><div class="b">5</div><div>
     <h3>Fix, restart, and run again</h3>
-    <p>The audit is only done when the summary shows <code>0 EXPOSTO · 0 SEM TESTE · 0 VERIFIQUE · 0 REINICIE</code> (exit 0) on every machine, in a full pass (without <code>--rapido</code>). A process that was already running keeps the old list in memory: updating without restarting doesn't fix it.</p>
+    <p>The audit is only done when the summary shows <code>0 EXPOSTO · 0 SEM TESTE · 0 VERIFIQUE · 0 REINICIE</code> (exit 0) on every machine, in a full pass (without <code>--rapido</code>, and with the scope block showing nothing important left out). A process that was already running keeps the old list in memory: updating without restarting doesn't fix it.</p>
   </div></div>
 </div></section>
 
@@ -338,7 +342,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
     <tr><td>Ubuntu</td><td><code>20260816ubuntu0.&lt;Ubuntu version&gt;</code> (e.g., <code>20260816ubuntu0.24.04.1</code>)</td><td>system</td></tr>
     <tr><td>Debian</td><td><code>20250419~deb12u2</code> (Debian 12) · <code>20250419+deb13u1</code> (Debian 13)</td><td>system</td></tr>
     <tr><td>Alpine</td><td><code>ca-certificates 20261020-r0</code></td><td>system / containers</td></tr>
-    <tr><td>Python</td><td><code>certifi 2026.10.19</code> · <code>pip 26.2.2</code> · <code>uv 0.13.4</code></td><td>in each venv</td></tr>
+    <tr><td>Python</td><td><code>certifi 2026.10.19</code> · <code>pip 26.2.2</code> · <code>uv 0.13.5</code> · Python itself: <code>3.15.1</code> · <code>3.14.9</code> · <code>3.13.17</code></td><td>in each venv</td></tr>
     <tr><td>Node</td><td><code>22.23.4</code> · <code>24.22.1</code> · <code>26.12.1</code> (Node 20: no fix)</td><td>inside the binary</td></tr>
     <tr><td>Go</td><td><code>1.27.3</code> · <code>1.26.10</code> + recompile</td><td>on Linux, the system's (see step 4)</td></tr>
     <tr><td>Java (OpenJDK)</td><td>the two roots removed from <code>cacerts</code> (<code>keytool -delete</code>) or an updated JDK</td><td>each JDK's <code>cacerts</code> file</td></tr>
@@ -346,7 +350,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
     <tr><td>Firefox / NSS</td><td><code>158.0.1</code> · <code>NSS 3.131.1</code></td><td>browser</td></tr>
     <tr><td>Electron</td><td><code>44.9.1</code> · <code>43.8.1</code> · <code>42.11.16</code></td><td>inside each app</td></tr>
     <tr><td>Rust</td><td><code>rustls-webpki 0.103.16</code> · <code>webpki-roots 1.0.10</code></td><td>inside each program</td></tr>
-    <tr><td>FreeBSD</td><td>pending as of 10/21/2026</td><td>—</td></tr>
+    <tr><td>FreeBSD</td><td><code>ca_root_nss 1.131.1</code> (ports) · base: <code>15.1-RELEASE-p6</code> · <code>14.5-RELEASE-p3</code> · <code>14.4-RELEASE-p12</code> (FreeBSD-SA-26:73)</td><td>system</td></tr>
   </table></div>
 
   <div class="step" style="margin-top:34px"><div class="b">1</div><div>
@@ -368,7 +372,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 <span class="k">python3 -c "import certifi; print(certifi.__version__, certifi.where())"</span>  <span class="c"># 2026.10.19 or newer</span>
 <span class="c"># tools installed with pipx / uv tool</span>
 <span class="k">pipx upgrade-all</span>        <span class="c"># or: pipx runpip &lt;app&gt; install -U certifi</span>
-<span class="k">uv self update</span>          <span class="c"># uv 0.13.4 or newer</span>
+<span class="k">uv self update</span>          <span class="c"># uv 0.13.5 or newer</span>
 <span class="k">uv tool upgrade --all</span>
 <span class="c"># conda environments (miniconda/anaconda)</span>
 <span class="k">conda update -n &lt;environment&gt; certifi</span></pre>
@@ -439,7 +443,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
     <div class="grid g3" style="margin:14px 0">
       <div class="card"><h3>A · Floating tag</h3><p><code>redis:alpine</code>, <code>nginx:alpine</code>, <code>postgres:16-alpine</code>, <code>…:latest</code>, <code>…:main</code>. The vendor swaps the image behind the same tag: just pull and recreate.</p></div>
       <div class="card"><h3>B · Built by you</h3><p>An image made with <code>docker build</code> from your own Dockerfile. Rebuilding from scratch can break the app; the safe path is the <b>layer on top</b>.</p></div>
-      <div class="card"><h3>C · Pinned version</h3><p><code>kong:2.8.1</code>, <code>gotrue:v2.197.0</code>. Pulling the same tag again changes nothing: you need to bump the version, and sometimes wait for the vendor.</p></div>
+      <div class="card"><h3>C · Pinned version</h3><p><code>kong:2.8.1</code>, <code>gotrue:v2.197.0</code>. A tag changes little, but it isn't immutable: the vendor can republish the same tag with the fixed base (what never changes is the digest, <code>sha256:…</code>). Pull again and compare the digest; if it didn't change or it's still EXPOSTO, bump the version, and sometimes wait for the vendor.</p></div>
     </div>
 
     <p>A container without curl, wget, Node, or Python (e.g., <code>postgres:16</code> Debian) shows up as "no network tool": the script has no way to test the connection. Check the list through the package (<code>docker exec &lt;c&gt; dpkg-query -W ca-certificates</code> or <code>apk list -I ca-certificates-bundle</code>) and compare it with the version table.</p>
@@ -516,7 +520,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 <span class="c"># 4) update</span>
 <span class="k">docker compose pull n8n && docker compose up -d n8n</span>
 <span class="k">docker compose exec n8n node -v</span>                     <span class="c"># confirm the new Node</span></pre>
-    <p>Without changing the pinned tag, the <code>pull</code> brings the same image and nothing changes.</p>
+    <p>Pulling the same tag may bring a republished image. Check whether the digest changed (<code>docker image inspect -f '{{.RepoDigests}}' n8nio/n8n:2.4.8</code>, before and after): if it didn't change, bumping the version is the way.</p>
     <div class="nota"><b>The old docker-compose (1.29) trap:</b> when bringing up the new image it may fail with <code>KeyError: 'ContainerConfig'</code> and leave n8n stopped. Remove the old container first (the data stays in the volume): <code>docker-compose rm -f -s n8n && docker-compose up -d n8n</code>. Even better: migrate to <code>docker compose</code> v2.</div>
     <p>Other ways to keep the data: if n8n uses a mounted folder (e.g., <code>./n8n_data</code> or <code>~/.n8n</code>), copy the folder with n8n stopped; if it uses Postgres, run <code>pg_dump</code> on the database. In every case, keep the encryption key with it (<code>N8N_ENCRYPTION_KEY</code> or the <code>config</code> file in the n8n folder): without it, the saved credentials don't come back.</p>
     <p>After updating, check the log (<code>docker compose logs n8n</code>). Big version jumps can bring new warnings, like the one about the Code node's Python runner.</p>
@@ -671,10 +675,11 @@ php_admin_flag[session.upload_progress.enabled] = off
 <span class="c"># PHP 8.5 only:</span>
 php_admin_flag[fatal_error_backtraces] = off</pre>
     <ul>
-      <li><code>memory_limit = -1</code> (against <code>CVE-2026-109618</code>) removes PHP's memory limit. This closes the attack path, but a buggy script can consume all of the server's RAM. That's why the PHP team recommends setting a limit outside PHP: the memory limit of the container (Docker) or of the service (<i>cgroup</i>, in systemd <code>MemoryMax=</code>), preferably killing only the affected process.</li>
+      <li><code>memory_limit = -1</code> (against <code>CVE-2026-109618</code>) removes PHP's memory limit. This removes the memory failure the attacker controls, but it doesn't close the path completely: a real allocation failure (the server running out of memory) can still reach the vulnerable point. And a buggy script can consume all of the server's RAM. That's why the PHP team recommends setting a limit outside PHP: the memory limit of the container (Docker) or of the service (<i>cgroup</i>, in systemd <code>MemoryMax=</code>), preferably killing only the affected process.</li>
       <li>Don't use <code>RLIMIT_AS</code>/<code>RLIMIT_DATA</code> (<code>ulimit</code> memory limits) instead: they can trigger the very out-of-memory failure that is vulnerable.</li>
       <li>Turning off <code>session.upload_progress.enabled</code> and <code>fatal_error_backtraces</code> (against <code>CVE-2026-109619</code>) blocks only the confirmed paths, not other variants.</li>
     </ul>
+    <div class="nota red"><b>New PHP notice (10/23/2026, CVE-2026-115560): keep <code>session.upload_progress.enabled = 0</code> even after updating</b>, until the next regular PHP release. The risk only exists in a rare combination: the app sets <code>session.serialize_handler</code> to <code>php_binary</code> or <code>php_serialize</code> in the configuration and switches to <code>php</code> with <code>ini_set()</code> before <code>session_start()</code>, with upload progress on (the default). An app that never switches the serialize_handler at runtime isn't affected by this path and can leave the feature on. If you already turned it off on 10/21, there's nothing more to do. <code>audita.sh</code> warns (an <code>info</code> line) when the feature is on in the command-line PHP; what counts is the FPM or Apache configuration.</div>
   </div></div>
 
   <div class="step"><div class="b">5</div><div>
@@ -730,7 +735,7 @@ php_admin_flag[fatal_error_backtraces] = off</pre>
 <pre><span class="k">dig CAA seudominio.com.br +short</span></pre></div>
     <div class="card"><h3>⚙️ CI/CD and secrets</h3><ul>
       <li>Rebuild the images in the pipeline with <code>--pull</code>: an old cached image brings an old list.</li>
-      <li>Run <code>audita.sh</code> as a deploy step; exit code <code>1</code> or <code>2</code> blocks the deploy (<code>3</code> asks for a restart).</li>
+      <li>Run <code>audita.sh</code> in the pipeline as an alarm: any exit other than <code>0</code> blocks the deploy (<code>1</code> EXPOSTO, <code>2</code> SEM TESTE, <code>3</code> asks for a restart). Exit <code>0</code> alone doesn't release anything: it only counts within the scope printed at the end, and the script is a survey, not a certificate.</li>
       <li>No keys in the code or in git (<code>.env</code> outside the repository); if a key leaked, replace it, don't just delete it.</li>
       <li>For websites, the INEMA <a href="https://inematds.github.io/blinda-site/guia/" target="_blank" rel="noopener">blinda-site</a> method checks headers, dependencies, secrets, and the database with an AI agent, without touching the live site.</li>
     </ul></div>
@@ -751,7 +756,7 @@ php_admin_flag[fatal_error_backtraces] = off</pre>
     <div class="card"><h3>Container (Docker)</h3><p>A lightweight "machine" inside the server, with its own system and certificate list. Old image = old list.</p></div>
     <div class="card"><h3>pm2 · systemd</h3><p>Managers that keep programs running on the server and restart them.</p></div>
     <div class="card"><h3>cacerts · keystore</h3><p>The file where Java stores the certificate authorities it trusts. Each JDK can have its own; <code>keytool</code> shows what's inside.</p></div>
-    <div class="card"><h3>Floating tag · pinned tag</h3><p>The name after the colon in a Docker image. A floating tag (<code>latest</code>, <code>alpine</code>) changes content over time; a pinned tag (<code>2.8.1</code>) never changes.</p></div>
+    <div class="card"><h3>Floating tag · pinned tag</h3><p>The name after the colon in a Docker image. A floating tag (<code>latest</code>, <code>alpine</code>) changes content over time; a pinned tag (<code>2.8.1</code>) changes little, but it isn't immutable: the vendor can republish the same tag. What never changes is the digest (<code>sha256:…</code>).</p></div>
     <div class="card"><h3>Cross-signed chain</h3><p>When a certificate authority is also signed by another, older root, so it works on old devices. Here: the eMudhra chain also goes through the <code>AAA Certificate Services</code> root.</p></div>
     <div class="card"><h3>busybox</h3><p>A minimal set of commands (sh, wget…) used in small images like Alpine. Its <code>wget</code> shows different errors than the regular wget.</p></div>
     <div class="card"><h3>CVE</h3><p>A public number for a security flaw, used to look up the fix (e.g., <code>CVE-2026-109618</code>).</p></div>
@@ -763,11 +768,12 @@ php_admin_flag[fatal_error_backtraces] = off</pre>
   <span class="chip">Sources</span>
   <h2>Where to check</h2>
   <ol class="fontes">
-    <li>Test page and details of the eMudhra case: <a href="https://emudhra.we-have-a-problem.com/" target="_blank" rel="noopener">emudhra.we-have-a-problem.com</a></li>
+    <li>Test page, details of the eMudhra case, and fixed versions by system and tool (includes uv 0.13.5 and FreeBSD): <a href="https://emudhra.we-have-a-problem.com/" target="_blank" rel="noopener">emudhra.we-have-a-problem.com</a></li>
     <li>Mozilla, incident discussion: <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=2083449" target="_blank" rel="noopener">bugzilla.mozilla.org/show_bug.cgi?id=2083449</a></li>
     <li>Google, Chrome and Android protection: <a href="https://blog.google/security/protecting-chrome-and-android-users-from-compromised-emudhra-intermediate-ca-certificates/" target="_blank" rel="noopener">blog.google/security/…emudhra…</a></li>
     <li>SOCRadar, risks and fixes: <a href="https://socradar.io/blog/emudhra-ca-key-compromise-weak-keys-risks-and-fixes/" target="_blank" rel="noopener">socradar.io/blog/emudhra-ca-key-compromise…</a></li>
     <li>PHP, security advisory of 10/21/2026: <a href="https://www.php.net/archive/2026.php#2026-10-21-5" target="_blank" rel="noopener">php.net/archive/2026.php</a></li>
+    <li>PHP, informational notice of 10/23/2026 (CVE-2026-115560, upload progress): <a href="https://www.php.net/archive/2026.php" target="_blank" rel="noopener">php.net/archive/2026.php</a></li>
     <li>OpenAI, PHP2Shell checker: <a href="https://github.com/openai/php2shell-checker" target="_blank" rel="noopener">github.com/openai/php2shell-checker</a></li>
   </ol>
 </div></section>
@@ -775,7 +781,7 @@ php_admin_flag[fatal_error_backtraces] = off</pre>
 <footer>
   <div class="wrap">
     <div class="pill">bash</div><div class="pill">curl · node · python</div><div class="pill">docker</div><div class="pill">ssh</div>
-    <p style="margin-top:18px">auditoria-seguranca · open and free guide, version <span data-v="versao">1.1.1</span>, updated on <span data-v="data">10/23/2026</span> ·
+    <p style="margin-top:18px">auditoria-seguranca · open and free guide, version <span data-v="versao">1.1.2</span>, updated on <span data-v="data">10/23/2026</span> ·
       <a href="https://github.com/inematds/auditoria-seguranca">inematds/auditoria-seguranca</a> ·
       <a href="https://inema.club">INEMA.CLUB</a></p>
   </div>

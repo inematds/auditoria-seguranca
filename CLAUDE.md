@@ -1,11 +1,14 @@
 # CLAUDE.md — auditoria-seguranca
 
-Kit/guia de segurança do INEMA (23/10/2026): como atualizar cada camada, como auditar com `audita.sh` (teste de conexão real, só leitura), caso real (eMudhra) e PHP2Shell.
+Kit/guia de segurança do INEMA (23/10/2026): como atualizar cada camada, como auditar com `audita.sh` (teste de conexão real, não altera nada; é levantamento, não certificado), caso real (eMudhra) e PHP2Shell.
 
 - Repo: `inematds/auditoria-seguranca` (público). Commits com autor `inematds <inematds@gmail.com>`.
 - Guia: `guia/index.html` (PT, fonte) + `guia/en/` + `guia/es/`; GitHub Pages por Actions (`.github/workflows/pages.yml`). Push de mudança no workflow: por SSH (`git push git@github.com:inematds/auditoria-seguranca.git main`).
 - Versão: arquivo `VERSION` é a fonte; `python3 ferramentas/versao.py X.Y.Z` atualiza audita.sh, capa/rodapé do guia (`data-v`) e README. CHANGELOG.md à mão.
-- `audita.sh` é **só leitura**: nunca instalar, alterar ou gravar nada nas máquinas auditadas. Três estados (EXPOSTO / protegido / SEM TESTE); erro de rede nunca conta como protegido. Guardar `$?` numa variável ANTES de qualquer `echo`.
+- `audita.sh` **não altera nada**: nunca instalar, alterar ou gravar nada nas máquinas auditadas (mas executa as ferramentas que testa). Estados EXPOSTO / protegido / SEM TESTE / VERIFIQUE / REINICIE.
+- **Teste que não terminou ou não prova nada = SEM TESTE e saída ≠ 0** (1.1.2): SSH ≠ 0/1/2/3, container sem shell/sem ferramenta/timeout/sem `__FIM_SONDA__`, `php -v` vazio, find cortado, docker sem permissão. "protegido" só por código/mensagem de verificação (curl 60/51, wget 5) ou, no busybox, pela lista do sistema sem a raiz daquela cadeia — nunca por dedução (site de controle abriu, palavra "certif" na mensagem). Saída 0 vale só dentro do escopo impresso.
+- **Executar binário achado no disco só se `ok_exec` aprovar** (arquivo, cada link e cada pasta do root/dono, sem gravação de outros; grupo pessoal aceito); com root, binário de usuário roda via `runuser` como o dono. Guardar `$?` numa variável ANTES de qualquer `echo`; variáveis das funções do host com `local` (os laços usam `p`, `n`, `d`).
+- Mudou o `audita.sh` → `bash testes/roda.sh` (stubs, sem rede) tem de dar 0 falhas, e rodar de verdade `--rapido` comparando os EXPOSTO com a versão anterior.
 - Nada de IP, hostname ou nome de cliente no repo (caso real anonimizado). Lista de servidores (`servidores.txt`) fica fora do git.
 - Fatos só de fontes oficiais (php.net, Mozilla, Google, emudhra.we-have-a-problem.com, SOCRadar). Não citar vídeos de terceiros.
 - Mudou o PT → retraduzir EN/ES com `inema-traduz` e conferir.

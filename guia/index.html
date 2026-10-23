@@ -151,7 +151,7 @@
   <div class="wrap">
     <div>
       <span class="chip">Grave · eMudhra + PHP2Shell · outubro de 2026</span>
-      <p class="versao">Guia <b>v<span data-v="versao">1.1.1</span></b> · atualizado em <span data-v="data">23/10/2026</span></p>
+      <p class="versao">Guia <b>v<span data-v="versao">1.1.2</span></b> · atualizado em <span data-v="data">23/10/2026</span></p>
       <h1>Atualize e <span class="amb">audite</span> seus sistemas hoje</h1>
       <p class="lead">O navegador já te protege. O seu servidor, o seu Python, o seu Node, os seus containers e o seu n8n talvez não. Aqui está como testar de verdade e como corrigir cada camada.</p>
       <div class="cta">
@@ -222,8 +222,8 @@ except Exception as e: print('protegido' if 'CERTIFICATE_VERIFY_FAILED' in str(e
 
   <div class="nota red"><b>Teste as duas cadeias.</b> Na nossa auditoria, várias ferramentas recusavam a cadeia <code>AAA</code> e aceitavam a <code>G3</code> (ou o contrário). Um teste só pode dar falsa sensação de segurança. E erro de rede (DNS, timeout) <b>não</b> é "protegido": é "sem teste".</div>
 
-  <h3 class="bloco">O script <code>audita.sh</code>: tudo de uma vez, só leitura</h3>
-  <p class="mut" style="max-width:70ch">Ele testa a conexão real com curl, wget, cada Node, Deno e Bun encontrado no disco (inclusive os embutidos em ferramentas), o Python do sistema, cada ambiente Python (venv) com o certifi dele e, por dentro, cada container Docker em execução. Confere a lista do Java (o arquivo <code>cacerts</code>), a versão do PHP no servidor e nos containers (PHP2Shell), o certifi desatualizado e os processos que precisam ser reiniciados. No fim, agrupa o que achou por tipo, com a correção de cada um. Não instala, não altera e não corrige nada.</p>
+  <h3 class="bloco">O script <code>audita.sh</code>: tudo de uma vez, sem alterar nada</h3>
+  <p class="mut" style="max-width:70ch">Ele testa a conexão real com curl, wget, cada Node, Deno e Bun encontrado no disco (inclusive os embutidos em ferramentas), o Python do sistema, cada ambiente Python (venv) com o certifi dele e, por dentro, cada container Docker em execução. Confere a lista do Java (o arquivo <code>cacerts</code>), a versão do PHP no servidor e nos containers (PHP2Shell), o certifi desatualizado e os processos que precisam ser reiniciados. No fim, agrupa o que achou por tipo, com a correção de cada um. Não instala, não altera e não corrige nada, mas <b>executa</b> as ferramentas que testa (é assim que ele prova a conexão). É um levantamento: aponta problemas; não certifica que a máquina está segura.</p>
 
   <div class="step"><div class="b">1</div><div>
     <h3>Baixe o script e leia antes de rodar</h3>
@@ -242,9 +242,11 @@ except Exception as e: print('protegido' if 'CERTIFICATE_VERIFY_FAILED' in str(e
 <span class="k">./audita.sh</span> --rapido        <span class="c"># sem procurar venvs, Node, Deno, Bun e JDKs no disco</span>
 <span class="k">./audita.sh</span> --sem-docker    <span class="c"># não entra nos containers</span>
 <span class="k">./audita.sh</span> --comandos      <span class="c"># mostra os comandos de correção (não executa nenhum)</span>
-<span class="k">./audita.sh</span> --go            <span class="c"># também testa o Go de verdade (veja abaixo)</span></pre>
+<span class="k">./audita.sh</span> --go            <span class="c"># também testa o Go de verdade (veja abaixo)</span>
+<span class="k">./audita.sh</span> --raiz /opt     <span class="c"># busca no disco só nessa pasta (repita --raiz para várias)</span></pre>
     <p>Dois testes não são de conexão, e o script avisa isso na linha. <b>Java</b>: ele confere se o arquivo de confiança do Java (<code>cacerts</code>) ainda tem as duas raízes, porque testar a conexão exigiria compilar código Java. <b>Go</b>: o teste real compila um programa pequeno numa pasta temporária (cerca de 100 MB, apagada no fim). Como isso grava no disco, só roda com <code>--go</code>.</p>
     <p>Com <code>sudo</code>, o Node instalado pelo nvm do seu usuário não fica no caminho padrão; ele ainda é achado pela busca no disco (não use <code>--rapido</code> nesse caso).</p>
+    <div class="nota"><b>Com <code>sudo</code>, o script não roda como root o que outra pessoa pode trocar.</b> Um programa achado no disco (Node, Deno, Bun, o Python de um venv, o <code>keytool</code> de um JDK) só é executado se o arquivo, cada link e cada pasta do caminho até a raiz forem do root ou do dono e mais ninguém puder gravar neles. O programa de um usuário roda <b>como esse usuário</b> (<code>runuser</code>), nunca como root. O que não passa vira <code>SEM TESTE</code>, com o motivo. Mesmo assim, rode como root só em máquina que você administra.</div>
   </div></div>
 
   <div class="step"><div class="b">3</div><div>
@@ -281,7 +283,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
         → ~/.deno/bin/deno upgrade
      1  containers de versão fixada (grupo C: subir a versão)
         ex.: n8n (n8nio/n8n:2.4.8)
-        → versão fixada: puxar a mesma tag não corrige; suba a versão (compose/config) para uma lançada depois de 21/10/2026
+        → versão fixada: a tag pode ter sido republicada com a base corrigida — salve o digest atual, puxe a mesma tag e recrie; se o digest não mudou ou seguir EXPOSTO, suba a versão
      1  processos a reiniciar (fora de job, upload ou live)
         ex.: meubot.service (sistema)
         → sudo systemctl restart meubot.service</pre>
@@ -289,12 +291,13 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
     <ul>
       <li><b>EXPOSTO</b>: conectou (ou, no Java, a lista ainda tem as raízes; no PHP, a versão é vulnerável). Corrija essa camada (seção <a href="#atualizar">Atualizar</a>).</li>
       <li><b>protegido</b>: recusou por erro de certificado.</li>
-      <li><b>SEM TESTE</b>: não deu para testar (rede, DNS, timeout). Repita antes de concluir.</li>
-      <li><b>VERIFIQUE</b>: PHP abaixo da versão corrigida, mas com número da distribuição (pode ter a correção por backport). No Debian/Ubuntu o script já procura o CVE no changelog local do pacote; se não achar, confira com <code>apt changelog &lt;pacote&gt; | grep CVE-2026-109618</code>. Conferido e corrigido? Rode com <code>--php-ok</code> e o VERIFIQUE deixa de segurar a saída.</li>
+      <li><b>SEM TESTE</b>: o teste não terminou ou não prova nada. Rede, DNS, timeout, container sem shell ou sem ferramenta, saída cortada, SSH que falhou, busca no disco interrompida, programa que não é seguro executar, ou o wget do busybox com recusa ambígua (essa só conta como protegida se a lista de certificados do sistema não tem a raiz daquela cadeia). Nunca conta como protegido. Repita ou teste de outro jeito antes de concluir.</li>
+      <li><b>VERIFIQUE</b>: PHP em versão de teste (RC, beta, dev: número maior não prova correção) ou abaixo da versão corrigida, mas com número da distribuição (pode ter a correção por backport). No Debian/Ubuntu o script já procura o CVE no changelog local do pacote; se não achar, confira com <code>apt changelog &lt;pacote&gt; | grep CVE-2026-109618</code>. Conferido e corrigido? Rode com <code>--php-ok</code> e o VERIFIQUE deixa de segurar a saída.</li>
       <li><b>REINICIE</b>: processo que começou antes da correção e ainda usa o programa ou a lista antiga. Veja <a href="#reiniciar">quem reiniciar</a>.</li>
     </ul>
     <p>No fim vem o bloco <b>o que corrigir, por tipo</b>: quantos itens de cada tipo, um exemplo e o comando sugerido. O resumo conta linhas (cada ferramenta aparece duas vezes, G3 e AAA); o bloco conta itens. Com <code>--comandos</code> sai a lista completa, um comando por item, para você revisar e rodar um por um. O script nunca executa a correção.</p>
-    <p>Código de saída: <code>0</code> tudo zerado, <code>1</code> há EXPOSTO, <code>2</code> há teste que não rodou, <code>3</code> nada conecta, mas falta reiniciar processos ou conferir o PHP. Dá para usar em monitoramento.</p>
+    <p>No fim vem também o bloco <b>escopo desta rodada</b>: o que ficou de fora (<code>--rapido</code>, <code>--sem-docker</code>, <code>--raiz</code>, <code>--php-ok</code>, Go sem <code>--go</code>, e com qual usuário rodou).</p>
+    <p>Código de saída: <code>0</code> as verificações feitas passaram, <b>dentro do escopo impresso</b>; <code>1</code> há EXPOSTO; <code>2</code> há SEM TESTE; <code>3</code> nada conecta, mas falta reiniciar processos ou conferir o PHP. Saída <code>0</code> não quer dizer que a máquina inteira está segura. Em monitoramento, trate qualquer saída diferente de 0 como alerta e não libere deploy automático só pela saída 0.</p>
   </div></div>
 
   <div class="step"><div class="b">4</div><div>
@@ -307,11 +310,12 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 
 <span class="c"># chave SSH específica (vale para todos os destinos)</span>
 <span class="k">./audita.sh</span> --chave ~/.ssh/minha_chave --ssh root@servidor1</pre>
+    <p>Se o SSH não conecta ou cai no meio (tempo esgotado, <code>bash</code> ausente lá), a linha diz <code>SEM TESTE</code> com o código e a saída não é 0: um servidor que não respondeu nunca passa como limpo.</p>
   </div></div>
 
   <div class="step"><div class="b">5</div><div>
     <h3>Corrija, reinicie e rode de novo</h3>
-    <p>A auditoria só termina quando o resumo mostra <code>0 EXPOSTO · 0 SEM TESTE · 0 VERIFIQUE · 0 REINICIE</code> (saída 0) em todas as máquinas, numa passada completa (sem <code>--rapido</code>). Processo que já estava rodando guarda a lista antiga na memória: atualizar sem reiniciar não resolve.</p>
+    <p>A auditoria só termina quando o resumo mostra <code>0 EXPOSTO · 0 SEM TESTE · 0 VERIFIQUE · 0 REINICIE</code> (saída 0) em todas as máquinas, numa passada completa (sem <code>--rapido</code>, e com o bloco de escopo sem nada importante de fora). Processo que já estava rodando guarda a lista antiga na memória: atualizar sem reiniciar não resolve.</p>
   </div></div>
 </div></section>
 
@@ -338,7 +342,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
     <tr><td>Ubuntu</td><td><code>20260816ubuntu0.&lt;versão do Ubuntu&gt;</code> (ex.: <code>20260816ubuntu0.24.04.1</code>)</td><td>sistema</td></tr>
     <tr><td>Debian</td><td><code>20250419~deb12u2</code> (Debian 12) · <code>20250419+deb13u1</code> (Debian 13)</td><td>sistema</td></tr>
     <tr><td>Alpine</td><td><code>ca-certificates 20261020-r0</code></td><td>sistema / containers</td></tr>
-    <tr><td>Python</td><td><code>certifi 2026.10.19</code> · <code>pip 26.2.2</code> · <code>uv 0.13.4</code></td><td>em cada venv</td></tr>
+    <tr><td>Python</td><td><code>certifi 2026.10.19</code> · <code>pip 26.2.2</code> · <code>uv 0.13.5</code> · o próprio Python: <code>3.15.1</code> · <code>3.14.9</code> · <code>3.13.17</code></td><td>em cada venv</td></tr>
     <tr><td>Node</td><td><code>22.23.4</code> · <code>24.22.1</code> · <code>26.12.1</code> (Node 20: sem correção)</td><td>dentro do binário</td></tr>
     <tr><td>Go</td><td><code>1.27.3</code> · <code>1.26.10</code> + recompilar</td><td>no Linux, a do sistema (ver passo 4)</td></tr>
     <tr><td>Java (OpenJDK)</td><td>as duas raízes removidas do <code>cacerts</code> (<code>keytool -delete</code>) ou JDK atualizado</td><td>arquivo <code>cacerts</code> de cada JDK</td></tr>
@@ -346,7 +350,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
     <tr><td>Firefox / NSS</td><td><code>158.0.1</code> · <code>NSS 3.131.1</code></td><td>navegador</td></tr>
     <tr><td>Electron</td><td><code>44.9.1</code> · <code>43.8.1</code> · <code>42.11.16</code></td><td>dentro de cada app</td></tr>
     <tr><td>Rust</td><td><code>rustls-webpki 0.103.16</code> · <code>webpki-roots 1.0.10</code></td><td>dentro de cada programa</td></tr>
-    <tr><td>FreeBSD</td><td>pendente em 21/10/2026</td><td>—</td></tr>
+    <tr><td>FreeBSD</td><td><code>ca_root_nss 1.131.1</code> (ports) · base: <code>15.1-RELEASE-p6</code> · <code>14.5-RELEASE-p3</code> · <code>14.4-RELEASE-p12</code> (FreeBSD-SA-26:73)</td><td>sistema</td></tr>
   </table></div>
 
   <div class="step" style="margin-top:34px"><div class="b">1</div><div>
@@ -368,7 +372,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 <span class="k">python3 -c "import certifi; print(certifi.__version__, certifi.where())"</span>  <span class="c"># 2026.10.19 ou mais</span>
 <span class="c"># ferramentas instaladas com pipx / uv tool</span>
 <span class="k">pipx upgrade-all</span>        <span class="c"># ou: pipx runpip &lt;app&gt; install -U certifi</span>
-<span class="k">uv self update</span>          <span class="c"># uv 0.13.4 ou mais</span>
+<span class="k">uv self update</span>          <span class="c"># uv 0.13.5 ou mais</span>
 <span class="k">uv tool upgrade --all</span>
 <span class="c"># ambientes conda (miniconda/anaconda)</span>
 <span class="k">conda update -n &lt;ambiente&gt; certifi</span></pre>
@@ -439,7 +443,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
     <div class="grid g3" style="margin:14px 0">
       <div class="card"><h3>A · Tag flutuante</h3><p><code>redis:alpine</code>, <code>nginx:alpine</code>, <code>postgres:16-alpine</code>, <code>…:latest</code>, <code>…:main</code>. O fornecedor troca a imagem por trás da mesma tag: basta puxar e recriar.</p></div>
       <div class="card"><h3>B · Construída por você</h3><p>Imagem feita com <code>docker build</code> a partir de um Dockerfile seu. Reconstruir do zero pode quebrar o app; o caminho seguro é a <b>camada por cima</b>.</p></div>
-      <div class="card"><h3>C · Versão fixada</h3><p><code>kong:2.8.1</code>, <code>gotrue:v2.197.0</code>. Puxar a mesma tag de novo não muda nada: é preciso subir a versão, e às vezes esperar o fornecedor.</p></div>
+      <div class="card"><h3>C · Versão fixada</h3><p><code>kong:2.8.1</code>, <code>gotrue:v2.197.0</code>. A tag muda pouco, mas não é imutável: o fornecedor pode republicar a mesma tag com a base corrigida (o que nunca muda é o digest, <code>sha256:…</code>). Puxe de novo e compare o digest; se não mudou ou continua EXPOSTO, suba a versão, e às vezes espere o fornecedor.</p></div>
     </div>
 
     <p>Container sem curl, wget, Node ou Python (ex.: <code>postgres:16</code> Debian) aparece como "nenhuma ferramenta de rede": o script não tem como testar a conexão. Confira a lista pelo pacote (<code>docker exec &lt;c&gt; dpkg-query -W ca-certificates</code> ou <code>apk list -I ca-certificates-bundle</code>) e compare com a tabela de versões.</p>
@@ -516,7 +520,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 <span class="c"># 4) atualize</span>
 <span class="k">docker compose pull n8n && docker compose up -d n8n</span>
 <span class="k">docker compose exec n8n node -v</span>                     <span class="c"># confirme o Node novo</span></pre>
-    <p>Sem trocar a tag fixada, o <code>pull</code> traz a mesma imagem e nada muda.</p>
+    <p>Puxar a mesma tag pode trazer uma imagem republicada. Confira se o digest mudou (<code>docker image inspect -f '{{.RepoDigests}}' n8nio/n8n:2.4.8</code>, antes e depois): se não mudou, subir a versão é o caminho.</p>
     <div class="nota"><b>Armadilha do docker-compose antigo (1.29):</b> ao subir a imagem nova ele pode falhar com <code>KeyError: 'ContainerConfig'</code> e deixar o n8n parado. Remova o container antigo antes (os dados ficam no volume): <code>docker-compose rm -f -s n8n && docker-compose up -d n8n</code>. Melhor ainda: migre para o <code>docker compose</code> v2.</div>
     <p>Outros jeitos de guardar os dados: se o n8n usa uma pasta montada (ex.: <code>./n8n_data</code> ou <code>~/.n8n</code>), copie a pasta com ele parado; se usa Postgres, faça o <code>pg_dump</code> do banco. Em todos os casos guarde junto a chave de criptografia (<code>N8N_ENCRYPTION_KEY</code> ou o arquivo <code>config</code> da pasta do n8n): sem ela as credenciais salvas não voltam.</p>
     <p>Depois de atualizar, olhe o log (<code>docker compose logs n8n</code>). Saltos grandes de versão podem trazer avisos novos, como o do executor de Python do nó Code.</p>
@@ -671,10 +675,11 @@ php_admin_flag[session.upload_progress.enabled] = off
 <span class="c"># só no PHP 8.5:</span>
 php_admin_flag[fatal_error_backtraces] = off</pre>
     <ul>
-      <li><code>memory_limit = -1</code> (contra a <code>CVE-2026-109618</code>) tira o limite de memória do PHP. Isso fecha o caminho de ataque, mas um script com defeito pode consumir toda a RAM do servidor. Por isso o time do PHP recomenda pôr um limite fora do PHP: o limite de memória do container (Docker) ou do serviço (<i>cgroup</i>, no systemd <code>MemoryMax=</code>), de preferência derrubando só o processo afetado.</li>
+      <li><code>memory_limit = -1</code> (contra a <code>CVE-2026-109618</code>) tira o limite de memória do PHP. Isso remove a falha de memória que o atacante controla, mas não fecha o caminho por completo: uma falha real de alocação (a memória do servidor acabando) ainda pode chegar ao ponto vulnerável. E um script com defeito pode consumir toda a RAM do servidor. Por isso o time do PHP recomenda pôr um limite fora do PHP: o limite de memória do container (Docker) ou do serviço (<i>cgroup</i>, no systemd <code>MemoryMax=</code>), de preferência derrubando só o processo afetado.</li>
       <li>Não use <code>RLIMIT_AS</code>/<code>RLIMIT_DATA</code> (limites de memória do <code>ulimit</code>) no lugar disso: eles podem provocar justamente a falha de memória vulnerável.</li>
       <li><code>session.upload_progress.enabled</code> e <code>fatal_error_backtraces</code> desligados (contra a <code>CVE-2026-109619</code>) bloqueiam só os caminhos confirmados, não outras variantes.</li>
     </ul>
+    <div class="nota red"><b>Aviso novo do PHP (23/10/2026, CVE-2026-115560): mantenha <code>session.upload_progress.enabled = 0</code> mesmo depois de atualizar</b>, até a próxima versão regular do PHP. O risco só existe numa combinação rara: o app define <code>session.serialize_handler</code> como <code>php_binary</code> ou <code>php_serialize</code> na configuração e troca para <code>php</code> com <code>ini_set()</code> antes do <code>session_start()</code>, com o upload progress ligado (o padrão). App que nunca troca o serialize_handler em execução não é afetado por esse caminho e pode deixar o recurso ligado. Quem já desligou em 21/10 não precisa fazer mais nada. O <code>audita.sh</code> avisa (linha <code>info</code>) quando o recurso está ligado no PHP de linha de comando; o que vale é a configuração do FPM ou do Apache.</div>
   </div></div>
 
   <div class="step"><div class="b">5</div><div>
@@ -730,7 +735,7 @@ php_admin_flag[fatal_error_backtraces] = off</pre>
 <pre><span class="k">dig CAA seudominio.com.br +short</span></pre></div>
     <div class="card"><h3>⚙️ CI/CD e segredos</h3><ul>
       <li>Reconstrua as imagens no pipeline com <code>--pull</code>: imagem velha em cache traz lista velha.</li>
-      <li>Rode o <code>audita.sh</code> como etapa do deploy; saída <code>1</code> ou <code>2</code> barra o deploy (<code>3</code> pede reinício).</li>
+      <li>Rode o <code>audita.sh</code> no pipeline como alarme: qualquer saída diferente de <code>0</code> barra o deploy (<code>1</code> EXPOSTO, <code>2</code> SEM TESTE, <code>3</code> pede reinício). A saída <code>0</code> sozinha não libera nada: ela vale só dentro do escopo impresso no fim, e o script é um levantamento, não um certificado.</li>
       <li>Nada de chave no código ou no git (<code>.env</code> fora do repositório); se uma chave vazou, troque, não só apague.</li>
       <li>Para sites, o método <a href="https://inematds.github.io/blinda-site/guia/" target="_blank" rel="noopener">blinda-site</a> do INEMA olha cabeçalhos, dependências, segredos e banco com um agente de IA, sem tocar no site no ar.</li>
     </ul></div>
@@ -751,7 +756,7 @@ php_admin_flag[fatal_error_backtraces] = off</pre>
     <div class="card"><h3>Container (Docker)</h3><p>Uma "máquina" leve dentro do servidor, com sistema e lista de certificados próprios. Imagem antiga = lista antiga.</p></div>
     <div class="card"><h3>pm2 · systemd</h3><p>Gerenciadores que mantêm programas rodando no servidor e os reiniciam.</p></div>
     <div class="card"><h3>cacerts · keystore</h3><p>Arquivo onde o Java guarda as certificadoras em que confia. Cada JDK pode ter o seu; o <code>keytool</code> mostra o que tem dentro.</p></div>
-    <div class="card"><h3>Tag flutuante · fixada</h3><p>O nome depois dos dois pontos na imagem Docker. Flutuante (<code>latest</code>, <code>alpine</code>) muda de conteúdo com o tempo; fixada (<code>2.8.1</code>) não muda nunca.</p></div>
+    <div class="card"><h3>Tag flutuante · fixada</h3><p>O nome depois dos dois pontos na imagem Docker. Flutuante (<code>latest</code>, <code>alpine</code>) muda de conteúdo com o tempo; fixada (<code>2.8.1</code>) muda pouco, mas não é imutável: o fornecedor pode republicar a mesma tag. O que nunca muda é o digest (<code>sha256:…</code>).</p></div>
     <div class="card"><h3>Cadeia cruzada</h3><p>Quando uma certificadora também é assinada por outra raiz mais antiga, para funcionar em aparelhos velhos. Aqui: a cadeia da eMudhra também passa pela raiz <code>AAA Certificate Services</code>.</p></div>
     <div class="card"><h3>busybox</h3><p>Conjunto mínimo de comandos (sh, wget…) usado em imagens pequenas como Alpine. O <code>wget</code> dele mostra erros diferentes do wget comum.</p></div>
     <div class="card"><h3>CVE</h3><p>Número público de uma falha de segurança, usado para procurar a correção (ex.: <code>CVE-2026-109618</code>).</p></div>
@@ -763,11 +768,12 @@ php_admin_flag[fatal_error_backtraces] = off</pre>
   <span class="chip">Fontes</span>
   <h2>Onde conferir</h2>
   <ol class="fontes">
-    <li>Página de teste e detalhes do caso eMudhra: <a href="https://emudhra.we-have-a-problem.com/" target="_blank" rel="noopener">emudhra.we-have-a-problem.com</a></li>
+    <li>Página de teste, detalhes do caso eMudhra e versões corrigidas por sistema e ferramenta (inclui uv 0.13.5 e FreeBSD): <a href="https://emudhra.we-have-a-problem.com/" target="_blank" rel="noopener">emudhra.we-have-a-problem.com</a></li>
     <li>Mozilla, discussão do incidente: <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=2083449" target="_blank" rel="noopener">bugzilla.mozilla.org/show_bug.cgi?id=2083449</a></li>
     <li>Google, proteção do Chrome e Android: <a href="https://blog.google/security/protecting-chrome-and-android-users-from-compromised-emudhra-intermediate-ca-certificates/" target="_blank" rel="noopener">blog.google/security/…emudhra…</a></li>
     <li>SOCRadar, riscos e correções: <a href="https://socradar.io/blog/emudhra-ca-key-compromise-weak-keys-risks-and-fixes/" target="_blank" rel="noopener">socradar.io/blog/emudhra-ca-key-compromise…</a></li>
     <li>PHP, aviso de segurança de 21/10/2026: <a href="https://www.php.net/archive/2026.php#2026-10-21-5" target="_blank" rel="noopener">php.net/archive/2026.php</a></li>
+    <li>PHP, aviso informativo de 23/10/2026 (CVE-2026-115560, upload progress): <a href="https://www.php.net/archive/2026.php" target="_blank" rel="noopener">php.net/archive/2026.php</a></li>
     <li>OpenAI, verificador PHP2Shell: <a href="https://github.com/openai/php2shell-checker" target="_blank" rel="noopener">github.com/openai/php2shell-checker</a></li>
   </ol>
 </div></section>
@@ -775,7 +781,7 @@ php_admin_flag[fatal_error_backtraces] = off</pre>
 <footer>
   <div class="wrap">
     <div class="pill">bash</div><div class="pill">curl · node · python</div><div class="pill">docker</div><div class="pill">ssh</div>
-    <p style="margin-top:18px">auditoria-seguranca · guia aberto e gratuito, versão <span data-v="versao">1.1.1</span>, atualizado em <span data-v="data">23/10/2026</span> ·
+    <p style="margin-top:18px">auditoria-seguranca · guia aberto e gratuito, versão <span data-v="versao">1.1.2</span>, atualizado em <span data-v="data">23/10/2026</span> ·
       <a href="https://github.com/inematds/auditoria-seguranca">inematds/auditoria-seguranca</a> ·
       <a href="https://inema.club">INEMA.CLUB</a></p>
   </div>

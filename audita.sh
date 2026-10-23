@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# audita.sh 1.1.1 — auditoria SÓ LEITURA da confiança em certificados (caso eMudhra, out/2026) + versão do PHP (PHP2Shell).
+# audita.sh 1.1.2 — auditoria da confiança em certificados (caso eMudhra, out/2026) + versão do PHP (PHP2Shell).
+# Não instala nem corrige nada, mas EXECUTA as ferramentas que testa (curl, node, python…): é um levantamento,
+# não um certificado de que a máquina está segura.
 #
 # Não lista certificados: testa a CONEXÃO REAL contra dois sites de teste assinados pelas chaves
 # comprometidas. Se a ferramenta conecta, ela ainda confia na cadeia ruim.
 #   EXPOSTO   = conectou (a ferramenta aceitou o certificado ruim)
-#   protegido = recusou por erro de certificado
-#   SEM TESTE = não deu para testar (rede, DNS, timeout, ferramenta quebrada) — NÃO conta como protegido
+#   protegido = recusou por erro de certificado (código/mensagem de verificação, nunca por dedução)
+#   SEM TESTE = o teste não terminou ou não prova nada (rede, DNS, timeout, ferramenta quebrada, container sem
+#               shell ou sem ferramenta, saída parcial, SSH que falhou, busca no disco cortada, binário que não
+#               é seguro executar) — NÃO conta como protegido e impede a saída 0
 #   VERIFIQUE = PHP abaixo da versão corrigida, mas com número de distribuição (pode ter backport)
 #   REINICIE  = processo rodando com binário/lista antiga (atualizou, mas não reiniciou)
 #
@@ -26,17 +30,24 @@
 #   ./audita.sh --go                    # também testa o Go de verdade: compila um teste numa pasta temporária
 #                                       # (grava ~100 MB em $TMPDIR e apaga no fim; por isso é opcional)
 #   ./audita.sh --php-ok                # você já conferiu o backport do PHP no changelog: VERIFIQUE não segura a saída
+#   ./audita.sh --raiz /opt --raiz /srv # busca no disco só nessas pastas (no lugar de / inteiro)
 #   ./audita.sh --versao
 #
-# Nada é instalado, alterado ou executado como correção. Arquivos só em pasta temporária apagada no fim.
-# Saída: 0 = tudo zerado; 1 = há EXPOSTO; 2 = há SEM TESTE; 3 = só falta REINICIE/VERIFIQUE.
+# Binários achados no disco só são executados se o arquivo, cada link e cada pasta do caminho pertencem ao root
+# ou ao dono do arquivo e ninguém mais pode gravar neles. Com root, o binário de um usuário roda COMO ESSE
+# usuário (runuser), nunca como root. O que não passa vira SEM TESTE, com o motivo.
+# Nada é instalado ou alterado. Arquivos só em pasta temporária apagada no fim.
+# Saída: 0 = as verificações FEITAS passaram, dentro do escopo impresso no fim (--rapido, --sem-docker, --raiz,
+#            --php-ok e o usuário aparecem lá); não quer dizer que a máquina inteira está segura
+#        1 = há EXPOSTO; 2 = há SEM TESTE; 3 = só falta REINICIE/VERIFIQUE.
 set -uo pipefail
 
-VERSAO=1.1.1
+VERSAO=1.1.2
 CERTIFI_MIN=2026.10.19
-RAPIDO=0; DOCKER=1; COMANDOS=0; GO=0; PHPOK=0; ALVOS=(); SSH_OPTS=()
+RAPIDO=0; DOCKER=1; COMANDOS=0; GO=0; PHPOK=0; ALVOS=(); SSH_OPTS=(); RAIZ_ARG=()
 while [ $# -gt 0 ]; do case "$1" in
   --ssh) ALVOS+=("$2"); shift 2;;
+  --raiz) RAIZ_ARG+=("$2"); shift 2;;
   --hosts) while IFS= read -r l; do l="${l%%#*}"; l="$(echo "$l" | xargs)"; [ -n "$l" ] && ALVOS+=("$l"); done < "$2"; shift 2;;
   --chave) SSH_OPTS+=(-i "$2"); shift 2;;
   --rapido) RAPIDO=1; shift;;
@@ -46,7 +57,7 @@ while [ $# -gt 0 ]; do case "$1" in
   --php-ok) PHPOK=1; shift;;
   --local) shift;;
   --versao|--version) echo "audita.sh $VERSAO"; exit 0;;
-  -h|--help) sed -n 2,32p "$0"; exit 0;;
+  -h|--help) sed -n '2,/^set -uo/p' "$0" | sed '$d'; exit 0;;
   *) echo "argumento desconhecido: $1" >&2; exit 64;;
 esac; done
 
@@ -58,8 +69,14 @@ if [ ${#ALVOS[@]} -gt 0 ]; then
     echo "################ $a"
     flags=(); [ $RAPIDO = 1 ] && flags+=(--rapido); [ $DOCKER = 0 ] && flags+=(--sem-docker)
     [ $COMANDOS = 1 ] && flags+=(--comandos); [ $GO = 1 ] && flags+=(--go); [ $PHPOK = 1 ] && flags+=(--php-ok)
+    for r in ${RAIZ_ARG[@]+"${RAIZ_ARG[@]}"}; do flags+=(--raiz "$(printf '%q' "$r")"); done
     ssh -o BatchMode=yes -o ConnectTimeout=10 ${SSH_OPTS[@]+"${SSH_OPTS[@]}"} "$a" "bash -s -- --local ${flags[*]-}" < "$0"; rc=$?
-    [ $rc = 255 ] && { echo "SEM TESTE  ssh  não conectou em $a"; rc=2; }
+    # só 0/1/2/3 são respostas do script; qualquer outro código (255 = não conectou, 124 = tempo, 127 = sem bash…) é SEM TESTE
+    case $rc in
+      0|1|2|3) ;;
+      255) echo "SEM TESTE  ssh  não conectou em $a (código 255)"; rc=2;;
+      *) echo "SEM TESTE  ssh  $a terminou com código $rc (124 = tempo esgotado, 127 = bash ausente): a auditoria não terminou lá"; rc=2;;
+    esac
     [ $rc = 1 ] && pior=1; [ $rc = 2 ] && [ $pior != 1 ] && pior=2; [ $rc = 3 ] && [ $pior = 0 ] && pior=3
     echo
   done
@@ -77,7 +94,6 @@ trap 'rm -rf "$TMPD"' EXIT
 SONDA=$(cat <<'SH'
 U_G3=https://dv-g3b-emudhra.we-have-a-problem.com/
 U_AAA=https://dv-g3b-aaa-emudhra.we-have-a-problem.com/
-U_OK=https://www.google.com/
 JS='var u=process.argv[process.argv.length-1];var q=require("https").get(u,{timeout:10000},function(r){r.resume();process.exit(10)});q.on("timeout",function(){process.exit(12)});q.on("error",function(e){var c=String(e.code||"");process.exit(/CERT|UNABLE_TO|SELF_SIGNED|DEPTH_ZERO|ERR_TLS/.test(c)?11:12)})'
 JSF='const u=__U__;const ex=c=>(typeof Deno!=="undefined"?Deno.exit(c):process.exit(c));try{await fetch(u,{signal:AbortSignal.timeout(10000)});ex(10)}catch(e){const s=[e,e&&e.code,e&&e.cause,e&&e.cause&&e.cause.code].map(String).join(" ");ex(/cert|UNABLE_TO|SELF_SIGNED|issuer/i.test(s)?11:12)}'
 PY='
@@ -108,6 +124,16 @@ except Exception as e:
 # impressões digitais (SHA-1 e SHA-256) das duas raízes, além dos apelidos usados por Debian e pelos JDKs
 RX_G3='emsign[^,]*ecc[^,]*g3|30:43:FA:4F:F2:57:DC:A0:C3:80|86:A1:EC:BA:08:9C:4A:8D:3B:BE'
 RX_AAA='comodo[^,]*aaa|aaa[^,]*certificate[^,]*services|D1:EB:23:A4:6D:17:D6:8F:D9:25|D7:A7:A0:FB:5D:7E:27:31:D7:71'
+# uma linha da ASSINATURA de cada raiz (PEM em 64 colunas): só existe naquele certificado
+L_G3='CUfvO6wIBHxcmbHtRwfSAjEAnbpV/KlK6O3t5nYBQnvI+GDZjVGLVTv7jHvrZQnD'
+L_AAA='l2D4kF501KKaU73yqWjgom7C12yxow+ev+to51byrvLjKzg6CYG1a4XXvi3tPxq3'
+LISTAS=${AUDITA_LISTAS:-/etc/ssl/certs/ca-certificates.crt /etc/ssl/cert.pem}
+# 0 = há lista do sistema legível e nenhuma tem a raiz desta cadeia ($1); 1 = alguma tem, ou não há lista para ler.
+# Por cadeia: a do G3 depende da raiz emSign G3; a cruzada, da AAA (um curl que confia só na G3 recusa a AAA).
+lista_sem_raiz(){ achou=0
+  for f in $LISTAS; do [ -r "$f" ] || continue; achou=1; grep -qF "$1" "$f" && return 1; done
+  [ $achou = 1 ]; }
+PRE=${PRE:-}; PRE_USER=${PRE_USER:-}; NOTA=
 st(){ case "$1" in 0) echo "EXPOSTO  ";; 1) echo "protegido";; 4) echo "VERIFIQUE";; *) echo "SEM TESTE";; esac; }
 linha(){ printf '%s  %-34s %-4s %s\n' "$(st "$1")" "$2" "$3" "$4"; }
 mapa(){ case "$1" in 10) return 0;; 11) return 1;; 13) return 3;; *) return 2;; esac; }
@@ -117,29 +143,31 @@ vge(){ a="$1."; b="$2."   # $1 >= $2 ? (sh puro: há containers sem awk)
     x=${x%%[!0-9]*}; y=${y%%[!0-9]*}; x=${x:-0}; y=${y:-0}
     [ "$x" -gt "$y" ] && return 0; [ "$x" -lt "$y" ] && return 1
   done; return 0; }
-t_curl(){ e=$(curl -sS -o /dev/null -m 10 "$1" 2>&1); r=$?
-  if [ $r = 0 ]; then return 0; elif [ $r = 60 ] || echo "$e" | grep -qi certif; then return 1; else return 2; fi; }
-CTRL_WGET=
+# curl: só o 60 (e o 51 dos curl antigos) é "o certificado do servidor não foi aceito".
+# 77 (não carregou a lista local), 58, 35, 6, 28… são falhas do teste, não recusa: SEM TESTE.
+t_curl(){ curl -sS -o /dev/null -m 10 "$1" >/dev/null 2>&1; r=$?
+  case $r in 0) return 0;; 60|51) return 1;; *) return 2;; esac; }
+# wget GNU: 5 = falha na verificação do certificado. wget do busybox: o ssl_client só diz "SSL_connect" +
+# "Connection reset", igual para certificado recusado e para queda de rede. Esse caso só vira protegido se a
+# lista do sistema (a que o ssl_client usa) foi lida e não tem nenhuma das duas raízes; senão, SEM TESTE.
 t_wget(){ e=$(wget -O /dev/null -T 10 "$1" 2>&1); r=$?   # sem -q: a mensagem de certificado vem no stderr
-  if [ $r = 0 ] || [ $r = 8 ]; then return 0; elif [ $r = 5 ] || echo "$e" | grep -qi certif; then return 1; fi
-  # wget do busybox: a recusa aparece como "ssl_client: SSL_connect" ou "Connection reset" — ambíguo.
-  # Confere com um site bom: se o site bom abre, a falha foi de certificado; se não abre, é rede.
-  if echo "$e" | grep -qiE 'ssl_client|SSL_connect|reset by peer'; then
-    [ -z "$CTRL_WGET" ] && { wget -O /dev/null -T 10 "$U_OK" >/dev/null 2>&1 && CTRL_WGET=ok || CTRL_WGET=falha; }
-    [ "$CTRL_WGET" = ok ] && return 1
-  fi
+  if [ $r = 0 ] || [ $r = 8 ]; then return 0; elif [ $r = 5 ]; then return 1; fi
+  if [ "$1" = "$U_AAA" ]; then raiz=$L_AAA; nr=AAA; else raiz=$L_G3; nr="emSign G3"; fi
+  if echo "$e" | grep -q 'SSL_connect' && lista_sem_raiz "$raiz"; then NOTA="(busybox: recusa ambígua, confirmada pela lista do sistema sem a raiz $nr)"; return 1; fi
+  echo "$e" | grep -q 'SSL_connect' && NOTA="(busybox: recusa ambígua e a lista do sistema não prova nada)"
   return 2; }
-t_node(){ "$1" -e "$JS" "$2" >/dev/null 2>&1; mapa $?; }
-t_py(){ "$1" -c "$PY" "$2" "$3" >/dev/null 2>&1; mapa $?; }
+t_node(){ $PRE "$1" -e "$JS" "$2" >/dev/null 2>&1; mapa $?; }
+t_py(){ $PRE "$1" -c "$PY" "$2" "$3" >/dev/null 2>&1; mapa $?; }
 t_deno(){ js=$(printf '%s' "$JSF" | sed "s|__U__|\"$2\"|"); dd=$(mktemp -d 2>/dev/null || echo /tmp/audita-deno.$$)
-  NO_COLOR=1 DENO_NO_UPDATE_CHECK=1 DENO_NO_PROMPT=1 DENO_DIR="$dd" "$1" eval "$js" >/dev/null 2>&1; r=$?; rm -rf "$dd"; mapa $r; }
-t_bun(){ js=$(printf '%s' "$JSF" | sed "s|__U__|\"$2\"|"); NO_COLOR=1 "$1" -e "$js" >/dev/null 2>&1; mapa $?; }
+  [ -n "${PRE_USER:-}" ] && chown "$PRE_USER" "$dd" 2>/dev/null   # rodando como o dono (runuser): a pasta de cache é dele
+  NO_COLOR=1 DENO_NO_UPDATE_CHECK=1 DENO_NO_PROMPT=1 DENO_DIR="$dd" $PRE "$1" eval "$js" >/dev/null 2>&1; r=$?; rm -rf "$dd"; mapa $r; }
+t_bun(){ js=$(printf '%s' "$JSF" | sed "s|__U__|\"$2\"|"); NO_COLOR=1 $PRE "$1" -e "$js" >/dev/null 2>&1; mapa $?; }
 # testa as duas cadeias com um comando; $1 = rótulo, resto = função + args (a URL vai no fim)
 # ULT = resultado das duas: 0 se alguma conectou, 2 se alguma não testou, 1 se as duas recusaram
 duas(){ rot=$1; shift; ULT=1
   for par in "G3 $U_G3" "AAA $U_AAA"; do tag=${par%% *}; u=${par#* }
-    "$@" "$u"; r=$?            # guarda o código ANTES de qualquer echo
-    linha "$r" "$rot" "$tag" ""
+    NOTA=; "$@" "$u"; r=$?     # guarda o código ANTES de qualquer echo
+    linha "$r" "$rot" "$tag" "$NOTA"
     if [ $r = 0 ]; then ULT=0; elif [ $r != 1 ] && [ $ULT = 1 ]; then ULT=2; fi
   done; }
 py_duas(){ rot=$1; py=$2; modo=$3; ULT=1
@@ -150,7 +178,7 @@ py_duas(){ rot=$1; py=$2; modo=$3; ULT=1
     if [ $r = 0 ]; then ULT=0; elif [ $r != 1 ] && [ $ULT = 1 ]; then ULT=2; fi
   done; }
 # Java: a lista (keystore) ainda tem as raízes? 0 = tem (EXPOSTO), 1 = não tem, 2 = não deu para ler
-t_jks(){ out=$("$2" -list -keystore "$1" -storepass changeit </dev/null 2>&1); [ $? = 0 ] || return 2
+t_jks(){ out=$($PRE "$2" -list -keystore "$1" -storepass changeit </dev/null 2>&1); [ $? = 0 ] || return 2
   echo "$out" | grep -qiE "$3" && return 0; return 1; }
 java_lista(){ ks=$1; kt=$2; rot=$3; ULT=1
   for tag in G3 AAA; do if [ $tag = G3 ]; then rx=$RX_G3; else rx=$RX_AAA; fi
@@ -176,9 +204,17 @@ de_pacote(){ f=$(readlink -f "$1" 2>/dev/null || echo "$1")
   if command -v apk >/dev/null 2>&1; then o=$(apk info --who-owns "$f" 2>/dev/null | sed -n 's/.* owned by //p'); [ -n "$o" ] && { echo "$o"; return 0; }; fi
   if command -v rpm >/dev/null 2>&1 && rpm -qf "$f" >/dev/null 2>&1; then rpm -qf "$f"; return 0; fi
   return 1; }
-php_ver(){ bin=$1; rot=$2; l=$("$bin" -v 2>/dev/null | head -1); ULT=1
-  v=$(echo "$l" | sed -n 's/^PHP \([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p'); [ -n "$v" ] || return 0
+php_ver(){ bin=$1; rot=$2; l=$($PRE "$bin" -v 2>/dev/null | head -1); ULT=1
+  v=$(echo "$l" | sed -n 's/^PHP \([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')
+  # php -v falhou ou não disse a versão: o PHP não some do relatório, vira SEM TESTE
+  [ -n "$v" ] || { ULT=2; linha 2 "$rot" PHP "php -v não respondeu com a versão: PHP2Shell não conferido"; return 0; }
   suf=$(echo "$l" | sed -n 's/^PHP [0-9.]*\([^ ]*\).*/\1/p')
+  # CVE-2026-115560 (aviso do PHP de 23/10): só informa; o risco depende do app trocar o serialize_handler
+  case "$(basename "$bin")" in *fpm*) ;; *) up=$($PRE "$bin" -r 'echo ini_get("session.upload_progress.enabled") ? 1 : 0;' 2>/dev/null)
+    [ "$up" = 1 ] && echo "info       $rot: session.upload_progress.enabled ligado (CLI) — CVE-2026-115560: desligue no FPM/Apache se algum app troca o session.serialize_handler em tempo de execução (guia, PHP2Shell passo 4)";; esac
+  # versão de teste (RC, alpha, beta, dev): número maior não prova correção
+  case "$suf" in [Rr][Cc]*|[Aa]lpha*|[Bb]eta*|-dev*|dev*)
+    ULT=4; linha 4 "$rot $v$suf" PHP "versão de teste: não conta como corrigida; use uma versão estável corrigida"; return 0;; esac
   pk=$(de_pacote "$(command -v "$bin" 2>/dev/null || echo "$bin")") && [ -z "$suf" ] && suf=" (pacote $pk)"
   # Debian/Ubuntu: o changelog local do pacote cita o CVE quando o backport já foi aplicado
   if [ -n "$pk" ] && [ -f "/usr/share/doc/$pk/changelog.Debian.gz" ] && \
@@ -207,6 +243,7 @@ basico(){ # ferramentas no PATH (usado dentro de containers)
   fi
   java_achar | while read -r ks kt; do java_lista "$ks" "$kt" "java cacerts $ks"; done
   command -v php >/dev/null 2>&1 && php_ver php "php"
+  echo __FIM_SONDA__   # sem esta linha a saída foi cortada: SEM TESTE
   true; }
 SH
 )
@@ -220,6 +257,58 @@ linha(){ conta "$1"; printf '%s  %-34s %-4s %s\n' "$(st "$1")" "$2" "$3" "$4"; }
 ACH=()
 achado(){ ACH+=("$1"$'\t'"$2"$'\t'"$3"); }   # separador: TAB (comandos podem ter "|")
 curto(){ echo "$1" | sed "s|^$HOME|~|"; }
+ESC=()   # escopo: o que esta rodada NÃO cobriu (vai para o resumo)
+escopo(){ ESC+=("$1"); }
+# teste que não rodou: linha SEM TESTE (conta no resumo) + achado com o que fazer
+sem_teste(){ linha 2 "$1" "" "$2"; achado sem-teste "$1" "$3"; }
+
+# ---------------------------------------------------------------------------------------------
+# Executar binário achado no disco com segurança. O arquivo, cada link no caminho e cada pasta até / precisam
+# ser do root ou do dono, sem gravação para grupo/outros (pasta com sticky bit, como /tmp, é aceita: ali ninguém
+# troca o que é de outro). Com root, o binário de um usuário roda como esse usuário (runuser), nunca como root.
+# Sem root, só roda o que é seu ou do root. Define PRE/PRE_USER (prefixo) ou NAO (motivo) e devolve 0/1.
+EU=$(id -u)
+# grupo que só tem o dono (o "grupo pessoal" do Ubuntu, umask 002): gravação pelo grupo não abre para ninguém
+GRP_OK=" "
+grupo_pessoal(){ local g=$1 o=$2 l nome mem
+  case "$GRP_OK" in *" $g:$o "*) return 0;; esac
+  l=$(getent group "$g" 2>/dev/null) || return 1; mem=${l##*:}; nome=$(getent passwd "$o" 2>/dev/null | cut -d: -f1)
+  [ -z "$mem" ] || [ "$mem" = "$nome" ] || return 1
+  [ -z "$(getent passwd 2>/dev/null | awk -F: -v g="$g" -v o="$o" '$4==g && $3!=o' | head -1)" ] || return 1
+  GRP_OK="$GRP_OK$g:$o "; return 0; }
+# gravável só por quem pode? $1 caminho, $2 dono, $3 modo (octal); sticky (/tmp) aceito para pastas
+grava_ok(){ local p=$1 o=$2 m=$3
+  if [ $((8#$m & 8#002)) != 0 ]; then [ -d "$p" ] && [ $((8#$m & 8#1000)) != 0 ] && return 0; return 1; fi
+  if [ $((8#$m & 8#020)) != 0 ]; then [ -d "$p" ] && [ $((8#$m & 8#1000)) != 0 ] && return 0; grupo_pessoal "$(stat -c %g "$p")" "$o" || return 1; fi
+  return 0; }
+pasta_segura(){ local d=$1 u=$2 o m   # d já resolvida (readlink -f)
+  while :; do o=$(stat -c %u "$d" 2>/dev/null) || return 1; m=$(stat -c %a "$d" 2>/dev/null) || return 1
+    [ "$o" = 0 ] || [ "$o" = "$u" ] || return 1
+    grava_ok "$d" "$o" "$m" || return 1
+    [ "$d" = / ] && return 0; d=$(dirname "$d"); done; }
+caminho_seguro(){ local p=$1 u=$2 n=0 d t o m   # segue cada link: a pasta de cada um e o arquivo final
+  while :; do n=$((n+1)); [ $n -gt 20 ] && return 1
+    d=$(readlink -f "$(dirname "$p")" 2>/dev/null) || return 1; pasta_segura "$d" "$u" || return 1
+    if [ -L "$p" ]; then t=$(readlink "$p"); case "$t" in /*) p=$t;; *) p="$d/$t";; esac; continue; fi
+    [ -f "$p" ] || return 1
+    o=$(stat -c %u "$p" 2>/dev/null); m=$(stat -c %a "$p" 2>/dev/null)
+    { [ "$o" = 0 ] || [ "$o" = "$u" ]; } && grava_ok "$p" "$o" "$m"; return; done; }
+ok_exec(){ local f o nome; PRE=; PRE_USER=; NAO=; f=$(readlink -f "$1" 2>/dev/null)
+  [ -n "$f" ] && [ -x "$f" ] || { NAO="executável não encontrado"; return 1; }
+  # dono = o da pasta onde o binário está (venv do usuário aponta para /usr/bin/python3, que é do root);
+  # se a pasta é do root, vale o dono do arquivo
+  o=$(stat -c %u "$(readlink -f "$(dirname "$1")")" 2>/dev/null); [ "$o" = 0 ] && o=$(stat -c %u "$f" 2>/dev/null)
+  if [ "$EU" = 0 ] && [ "$o" != 0 ]; then
+    caminho_seguro "$1" "$o" || { NAO="não executado: alguém além do dono (uid $o) pode trocar $(curto "$1") ou uma pasta do caminho"; return 1; }
+    nome=$(getent passwd "$o" 2>/dev/null | cut -d: -f1)
+    [ -n "$nome" ] && command -v runuser >/dev/null 2>&1 || { NAO="não executado: sem runuser para rodar como o dono (uid $o), e root não roda binário de usuário"; return 1; }
+    PRE="runuser -u $nome --"; PRE_USER=$nome; return 0
+  fi
+  caminho_seguro "$1" "$EU" || { NAO="não executado: o arquivo ou uma pasta do caminho é de outro usuário ou gravável por outros ($(curto "$1"))"; return 1; }
+  return 0; }
+# roda a função de teste só se o binário passa; senão SEM TESTE com o motivo
+seguro_ou_sem(){ local rot=$1 bin=$2; if ok_exec "$bin"; then return 0; fi
+  ULT=2; sem_teste "$rot" "$NAO" "teste como o dono do arquivo (sudo -u <dono> ./audita.sh --raiz <pasta>) ou corrija as permissões do caminho"; return 1; }
 SO_ID=$(. /etc/os-release 2>/dev/null; echo "${ID:-?} ${ID_LIKE:-}")
 fix_sistema(){ case "$SO_ID" in
   *alpine*) echo "apk upgrade --no-cache ca-certificates ca-certificates-bundle";;
@@ -257,13 +346,13 @@ if command -v dpkg-query >/dev/null 2>&1; then echo "ca-certificates $(dpkg-quer
 elif command -v apk >/dev/null 2>&1; then echo "ca-certificates $(apk info -v ca-certificates 2>/dev/null | head -1)"
 elif command -v rpm >/dev/null 2>&1; then echo "ca-certificates $(rpm -q ca-certificates 2>/dev/null)"; fi
 if ls /etc/ssl/certs 2>/dev/null | grep -qi 'emSign_ECC_Root_CA_-_G3'; then echo "raiz emSign ECC G3 ainda em /etc/ssl/certs: a lista do sistema pode ser anterior à correção (o teste de conexão é o que vale)"; fi
-command -v go >/dev/null 2>&1 && { gv=$(go version | awk '{print $3}'); echo "go $gv — corrigido: 1.27.3 / 1.26.10; no Linux o Go segue a lista do sistema (teste real: --go); binários Go antigos: RECOMPILE"; }
-command -v java >/dev/null 2>&1 && echo "java $(java -version 2>&1 | head -1 | sed 's/.*version //;s/"//g')"
+command -v go >/dev/null 2>&1 && ok_exec "$(command -v go)" && { gv=$(go version | awk '{print $3}'); echo "go $gv — corrigido: 1.27.3 / 1.26.10; no Linux o Go segue a lista do sistema (teste real: --go); binários Go antigos: RECOMPILE"; }
+command -v java >/dev/null 2>&1 && ok_exec "$(command -v java)" && echo "java $(java -version 2>&1 | head -1 | sed 's/.*version //;s/"//g')"
 systemctl is-enabled unattended-upgrades >/dev/null 2>&1 && echo "unattended-upgrades: ligado"
 
 echo "-- conexão real (G3 = cadeia emSign ECC Root CA - G3 · AAA = cadeia cruzada AAA Certificate Services)"
-if command -v curl >/dev/null 2>&1; then duas "curl" t_curl; [ $ULT = 0 ] && achado sistema curl "$(fix_sistema)"; fi
-if command -v wget >/dev/null 2>&1; then duas "wget" t_wget; [ $ULT = 0 ] && achado sistema wget "$(fix_sistema)"; fi
+if command -v curl >/dev/null 2>&1 && seguro_ou_sem curl "$(command -v curl)"; then duas "curl" t_curl; [ $ULT = 0 ] && achado sistema curl "$(fix_sistema)"; fi
+if command -v wget >/dev/null 2>&1 && seguro_ou_sem wget "$(command -v wget)"; then duas "wget" t_wget; [ $ULT = 0 ] && achado sistema wget "$(fix_sistema)"; fi
 
 # Node/Deno/Bun: os do PATH + os achados no disco (nvm, /opt, Node embutido de agentes e apps)
 NODES=(); DENOS=(); BUNS=(); PYS=(); CERTIFIS=(); JKS=()
@@ -271,7 +360,8 @@ command -v node >/dev/null 2>&1 && NODES+=("$(readlink -f "$(command -v node)")"
 for x in "$(command -v deno 2>/dev/null)" "$HOME/.deno/bin/deno"; do [ -n "$x" ] && [ -x "$x" ] && DENOS+=("$(readlink -f "$x")"); done
 for x in "$(command -v bun 2>/dev/null)" "$HOME/.bun/bin/bun"; do [ -n "$x" ] && [ -x "$x" ] && BUNS+=("$(readlink -f "$x")"); done
 while read -r ks kt; do [ -n "$ks" ] && JKS+=("$ks|$kt"); done < <(java_achar)
-for k in /usr/lib/jvm/*/lib/security/cacerts /usr/lib/jvm/*/jre/lib/security/cacerts; do
+JVM=${AUDITA_JVM:-/usr/lib/jvm}   # AUDITA_JVM e AUDITA_LISTAS existem só para os testes (testes/roda.sh)
+for k in "$JVM"/*/lib/security/cacerts "$JVM"/*/jre/lib/security/cacerts; do
   [ -f "$k" ] || continue; h=${k%/lib/security/cacerts}; h=${h%/jre}
   kt="$h/bin/keytool"; [ -x "$kt" ] || kt="$h/jre/bin/keytool"; [ -x "$kt" ] || kt=$(command -v keytool 2>/dev/null || echo keytool)
   JKS+=("$(readlink -f "$k")|$kt")
@@ -279,7 +369,14 @@ done
 if [ $RAPIDO = 0 ]; then
   echo "   (procurando venvs, Node/Deno/Bun, JDKs e certifi no disco — até 3 min; use --rapido para pular)"
   # / e, se estiverem em outra partição, /home /opt /srv /var/www /root (o -xdev não cruza partições)
-  RAIZES=(/); for m in /home /opt /srv /var/www /root; do mountpoint -q "$m" 2>/dev/null && RAIZES+=("$m"); done
+  if [ ${#RAIZ_ARG[@]} -gt 0 ]; then RAIZES=("${RAIZ_ARG[@]}"); escopo "busca no disco só em: ${RAIZ_ARG[*]}"
+  else RAIZES=(/); for m in /home /opt /srv /var/www /root; do mountpoint -q "$m" 2>/dev/null && RAIZES+=("$m"); done; fi
+  timeout 180 find "${RAIZES[@]}" -xdev \( -path /proc -o -path /sys -o -path '*/Trash/*' -o -path '*/.cache/uv' -o -path '*/.local/share/Trash' -o -path /var/lib/docker -o -path '*conda*/pkgs' \) -prune -o \
+    \( -name pyvenv.cfg -o \( -type d -name conda-meta \) -o -name 'certifi-*.dist-info' -o \( -type f -name cacerts -path '*/lib/security/*' \) -o \( -type f -perm -u+x \( -name node -o -name deno -o -name bun \) \) \) -print > "$TMPD/find.lst" 2>/dev/null; frc=$?
+  # 124 = passou de 3 min; >128 = morto por sinal; 2+ = erro do find: a lista é parcial
+  if [ $frc = 124 ] || [ $frc -ge 2 ]; then
+    sem_teste "busca no disco" "find terminou com código $frc (124 = 3 min esgotados): venvs e binários além dos $(wc -l < "$TMPD/find.lst") achados não foram testados" "rode por partes: ./audita.sh --raiz /home --raiz /opt …"
+  elif [ $frc = 1 ]; then escopo "busca no disco: algumas pastas não puderam ser lidas$([ "$EU" != 0 ] && echo ' (sem root: rode com sudo para cobrir as dos outros usuários)')"; fi
   while IFS= read -r f; do
     case "$f" in
       */pyvenv.cfg) d=${f%/pyvenv.cfg}; [ -x "$d/bin/python" ] && PYS+=("$d/bin/python");;
@@ -291,8 +388,8 @@ if [ $RAPIDO = 0 ]; then
       */node|*/deno|*/bun) head -c4 "$f" 2>/dev/null | grep -q ELF || continue
         case "$f" in */node) NODES+=("$(readlink -f "$f")");; */deno) DENOS+=("$(readlink -f "$f")");; */bun) BUNS+=("$(readlink -f "$f")");; esac;;
     esac
-  done < <(timeout 180 find "${RAIZES[@]}" -xdev \( -path /proc -o -path /sys -o -path '*/Trash/*' -o -path '*/.cache/uv' -o -path '*/.local/share/Trash' -o -path /var/lib/docker -o -path '*conda*/pkgs' \) -prune -o \
-            \( -name pyvenv.cfg -o \( -type d -name conda-meta \) -o -name 'certifi-*.dist-info' -o \( -type f -name cacerts -path '*/lib/security/*' \) -o \( -type f -perm -u+x \( -name node -o -name deno -o -name bun \) \) \) -print 2>/dev/null)
+  done < "$TMPD/find.lst"
+else escopo "--rapido: sem busca no disco (venvs, conda, Node/Deno/Bun embutidos, JDKs fora de /usr/lib/jvm, certifi)"
 fi
 uniq_arr(){ printf '%s\n' "$@" | awk 'NF && !s[$0]++'; }
 mapfile -t NODES < <(uniq_arr ${NODES[@]+"${NODES[@]}"})
@@ -303,23 +400,27 @@ mapfile -t CERTIFIS < <(uniq_arr ${CERTIFIS[@]+"${CERTIFIS[@]}"})
 mapfile -t JKS < <(printf '%s\n' ${JKS[@]+"${JKS[@]}"} | awk -F'|' 'NF && !s[$1]++')
 EXP_NODES=(); EXP_PYS=()
 for n in ${NODES[@]+"${NODES[@]}"}; do
-  v=$("$n" -v 2>/dev/null) || continue
+  seguro_ou_sem "node $(curto "$n")" "$n" || continue
+  v=$($PRE "$n" -v 2>/dev/null) || { sem_teste "node $(curto "$n")" "node -v falhou: binário quebrado ou incompatível" "confira o binário; se ninguém usa, apague"; continue; }
   duas "node $v $(curto "$n")" t_node "$n"
   echo "          versão: $(node_fix "$v")"
   [ $ULT = 0 ] && { achado node "$(curto "$n") ($v)" "$(node_cmd "$n" "$v")"; EXP_NODES+=("$n"); }
 done
 for d in ${DENOS[@]+"${DENOS[@]}"}; do
-  v=$("$d" -v 2>/dev/null | awk '{print $2}') || continue
+  seguro_ou_sem "deno $(curto "$d")" "$d" || continue
+  v=$($PRE "$d" -v 2>/dev/null | awk '{print $2}'); [ -n "$v" ] || { sem_teste "deno $(curto "$d")" "deno -v falhou" "confira o binário; se ninguém usa, apague"; continue; }
   duas "deno $v $(curto "$d")" t_deno "$d"
   dcmd="$(curto "$d") upgrade"; [ -x "$(dirname "$d")/python" ] && dcmd="$(curto "$(dirname "$d")")/python -m pip install -U deno   # Deno instalado pelo pip neste venv"
   [ $ULT = 0 ] && { achado deno "$(curto "$d") ($v)" "$dcmd"; EXP_NODES+=("$d"); }
 done
 for b in ${BUNS[@]+"${BUNS[@]}"}; do
-  v=$("$b" -v 2>/dev/null) || continue
+  seguro_ou_sem "bun $(curto "$b")" "$b" || continue
+  v=$($PRE "$b" -v 2>/dev/null) || { sem_teste "bun $(curto "$b")" "bun -v falhou" "confira o binário; se ninguém usa, apague"; continue; }
   duas "bun $v $(curto "$b")" t_bun "$b"
   [ $ULT = 0 ] && { achado bun "$(curto "$b") ($v)" "$(curto "$b") upgrade"; EXP_NODES+=("$b"); }
 done
-if command -v python3 >/dev/null 2>&1; then
+PRE=; PRE_USER=
+if command -v python3 >/dev/null 2>&1 && seguro_ou_sem "python3 do sistema" "$(command -v python3)"; then
   py_duas "python3 do sistema (ssl)" python3 sistema
   [ $ULT = 0 ] && achado sistema "python3 (ssl)" "$(fix_sistema)"
   py_duas "python3 do sistema (certifi)" python3 certifi
@@ -332,10 +433,13 @@ if command -v python3 >/dev/null 2>&1; then
   fi
 fi
 for p in ${PYS[@]+"${PYS[@]}"}; do
+  seguro_ou_sem "venv $(curto "${p%/bin/python}")" "$p" || continue
   py_duas "$([ -d "${p%/bin/python}/conda-meta" ] && echo conda || echo venv) $(curto "${p%/bin/python}")" "$p" certifi
   [ $ULT = 0 ] && { achado venv "$(curto "${p%/bin/python}")" "$(venv_cmd "${p%/bin/python}")"; EXP_PYS+=("${p%/bin/python}"); }
 done
-if [ $GO = 1 ] && command -v go >/dev/null 2>&1; then
+PRE=; PRE_USER=
+[ $GO = 0 ] && command -v go >/dev/null 2>&1 && escopo "Go sem teste de conexão (use --go)"
+if [ $GO = 1 ] && command -v go >/dev/null 2>&1 && seguro_ou_sem go "$(command -v go)"; then
   cat > "$TMPD/t.go" <<'GO'
 package main
 import ("net/http";"os";"strings";"time")
@@ -345,13 +449,14 @@ GO
     t_go(){ "$TMPD/t" "$1" >/dev/null 2>&1; mapa $?; }
     duas "go $(go version | awk '{print $3}') (programa novo)" t_go
     [ $ULT = 0 ] && achado sistema "go (usa a lista do sistema)" "$(fix_sistema)"
-  else linha 2 "go (não compilou o teste)" "" ""; fi
+  else sem_teste "go" "não compilou o programa de teste" "confira o go (go version) ou teste sem --go"; fi
 fi
 
 # Java: a lista (keystore) — o teste de conexão exigiria compilar código Java
 if [ ${#JKS[@]} -gt 0 ]; then
   echo "-- Java: lista de confiança (cacerts) — conferida pelo keytool, sem conexão"
   for j in "${JKS[@]}"; do ks=${j%%|*}; kt=${j#*|}
+    seguro_ou_sem "java $(curto "$ks") (keytool)" "$(command -v "$kt" 2>/dev/null || echo "$kt")" || continue
     java_lista "$ks" "$kt" "java $(curto "$ks")"
     if [ $ULT = 0 ]; then
       if [ "$ks" = /etc/ssl/certs/java/cacerts ]; then achado java "$ks" "[ \$(grep -cE '^!mozilla/(emSign_ECC_Root_CA_-_G3|Comodo_AAA_Services_root)' /etc/ca-certificates.conf) = 2 ] && sudo cp -a $ks $ks.bak && for a in debian:emsign_ecc_root_ca_-_g3.pem debian:comodo_aaa_services_root.pem; do sudo keytool -delete -alias \$a -keystore $ks -storepass changeit; done   # update-ca-certificates -f sozinho não tira as raízes; só remove se o sistema já desconfia das duas (!); backup em .bak"
@@ -367,7 +472,7 @@ done | awk '!s[$1]++{print $2}' > "$TMPD/php.lst"
 if [ ! -s "$TMPD/php.lst" ]; then echo "-- PHP2Shell: php não encontrado neste servidor (containers: veja abaixo)"
 else
   echo "-- PHP2Shell (corrigido: 8.5.12 · 8.4.27 · 8.3.36 · 8.2.35)"
-  while read -r p; do php_ver "$p" "$(basename "$p")"
+  while read -r p; do seguro_ou_sem "$(basename "$p")" "$p" || continue; php_ver "$p" "$(basename "$p")"
     [ $ULT = 0 ] && achado php "$p" "sudo apt update && sudo apt install --only-upgrade \$(dpkg -l 'php*' | awk '/^ii/{print \$2}')   # depois reinicie php-fpm/apache2"
     [ $ULT = 4 ] && achado php-verificar "$p" "apt changelog do pacote php: procure CVE-2026-109618"
   done < "$TMPD/php.lst"
@@ -406,7 +511,7 @@ cont_cmd(){ c=$1
   elif [ "${dig:-0}" = 0 ]; then
     echo "local	$c ($img)	imagem construída aqui: use a camada por cima da imagem antiga (guia, seção Containers): docker tag $img ${img%:*}:pre-emudhra; FROM ${img%:*}:pre-emudhra + ca-certificates/certifi/node novos"
   elif echo "$tag" | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+|^[0-9]{4}\.[0-9]{2}\.[0-9]{2}'; then   # X.Y.Z exato ou data: fixada (X.Y-alpine recebe patch: flutuante)
-    echo "fixada	$c ($img)	versão fixada: puxar a mesma tag não corrige; suba a versão (compose/config) para uma lançada depois de 21/10/2026"
+    echo "fixada	$c ($img)	versão fixada: a tag pode ter sido republicada com a base corrigida — salve o digest atual (docker image inspect -f '{{.RepoDigests}}' $img), puxe a mesma tag e recrie; se o digest não mudou ou seguir EXPOSTO, suba a versão (compose/config) para uma lançada depois de 21/10/2026"
   elif [ -n "$svc" ] && echo "$img" | grep -qiE '(^|/)(postgres|mysql|mariadb|mongo)(:|$)' && ! echo "$tag" | grep -qE '^[0-9]'; then
     echo "flutuante	$c ($img)	BANCO sem versão principal fixa: fixe a versão atual no compose (ex.: postgres:16-alpine) e faça o dump ANTES; depois ${ondecompose}docker compose up -d --pull always $svc"
   elif [ -n "$svc" ]; then
@@ -415,7 +520,13 @@ cont_cmd(){ c=$1
     echo "flutuante	$c ($img)	docker pull $img; salve docker inspect $c; recrie $c com as mesmas portas/env/volumes (sem volume: copie os dados antes)"
   fi; }
 
-if [ $DOCKER = 1 ] && command -v docker >/dev/null 2>&1 && docker ps >/dev/null 2>&1; then
+[ $DOCKER = 0 ] && escopo "--sem-docker: containers não testados"
+DOCK_OK=0
+if [ $DOCKER = 1 ] && command -v docker >/dev/null 2>&1 && seguro_ou_sem docker "$(command -v docker)"; then
+  if docker ps >/dev/null 2>&1; then DOCK_OK=1
+  else echo "-- containers Docker"; sem_teste "docker" "docker ps falhou (sem permissão ou serviço parado): nenhum container testado" "rode com sudo ou com um usuário do grupo docker; sem containers nesta máquina: --sem-docker"; fi
+fi
+if [ $DOCK_OK = 1 ]; then
   echo "-- containers Docker em execução (teste de dentro de cada um)"
   mapfile -t CONTS < <(docker ps --format '{{.Names}}')
   i=0
@@ -429,16 +540,25 @@ if [ $DOCKER = 1 ] && command -v docker >/dev/null 2>&1 && docker ps >/dev/null 
     img=$(docker inspect -f '{{.Config.Image}}' "$c" 2>/dev/null)
     echo "   [$c] $img"
     out=$(cat "$TMPD/c$i.out" 2>/dev/null); r=$(cat "$TMPD/c$i.rc" 2>/dev/null || echo 1)
-    if echo "$out" | grep -q 'executable file not found'; then echo "   (sem shell no container — imagem mínima; teste a imagem de outra forma)"
-    elif [ -n "$out" ]; then echo "$out" | sed '/^$/d;s/^/   /'
+    fim=0; echo "$out" | grep -q '^__FIM_SONDA__$' && fim=1
+    out=$(echo "$out" | grep -v '^__FIM_SONDA__$')
+    testes=$(echo "$out" | grep -cE '^(EXPOSTO|protegido|SEM TESTE|VERIFIQUE)')
+    [ -n "$out" ] && echo "$out" | sed '/^$/d;s/^/   /'
+    # o que impede dizer "testado": sem shell, tempo esgotado, saída cortada, nenhuma ferramenta
+    if echo "$out" | grep -q 'executable file not found' || { [ $fim = 0 ] && { [ "$r" = 126 ] || [ "$r" = 127 ]; }; }; then
+      sem_teste "container $c" "sem shell (imagem mínima): nada testado lá dentro" "teste a imagem de outra forma (ex.: docker run --rm --entrypoint '' <imagem> com uma imagem de depuração) ou confira a data da imagem base"
+    elif [ "$r" = 124 ]; then sem_teste "container $c" "passou de 120 s: teste cortado" "repita com o container menos ocupado"
+    elif [ $fim = 0 ]; then sem_teste "container $c" "saída cortada (código $r): o teste não terminou" "repita; se continuar, rode a sonda à mão com docker exec -it $c sh"
+    elif [ "$testes" = 0 ]; then sem_teste "container $c" "nenhuma ferramenta de teste (curl/wget/node/deno/bun/python3/php ausentes)" "teste a imagem de outra forma ou confira a data da imagem base"
+    fi
+    if [ -n "$out" ]; then
       echo "$out" | grep -q '^VERIFIQUE.* PHP ' && achado php-verificar "container $c" "docker exec $c php -v; confira no changelog do pacote se tem a correção do CVE-2026-109618"
       e=$(echo "$out" | grep -c '^EXPOSTO'); N_EXP=$((N_EXP + e)); N_SEM=$((N_SEM + $(echo "$out" | grep -c '^SEM TESTE'))); N_VER=$((N_VER + $(echo "$out" | grep -c '^VERIFIQUE')))
       if [ "$e" -gt 0 ]; then
         if echo "$out" | grep '^EXPOSTO' | grep -q ' PHP '; then achado php "container $c" "atualize a imagem/tag do PHP (ou a do app) para PHP corrigido e recrie"; fi
         if echo "$out" | grep '^EXPOSTO' | grep -qv ' PHP '; then IFS=$'\t' read -r t a cmd < <(cont_cmd "$c"); achado "container-$t" "$a" "$cmd"; fi
       fi
-    elif [ "$r" = 126 ] || [ "$r" = 127 ]; then echo "   (sem shell no container — imagem mínima; teste a imagem de outra forma)"
-    else echo "   (nenhuma ferramenta de rede no container: curl/wget/node/python3 ausentes)"; fi
+    fi
   done
 fi
 
@@ -501,7 +621,8 @@ if [ ${#ACH[@]} -gt 0 ]; then
       d["container-local"]="containers de imagem construída aqui (grupo B: camada por cima)";
       d["container-fixada"]="containers de versão fixada (grupo C: subir a versão)";
       d["container-supabase"]="Supabase local (grupo C: CLI + stop/start, depois testar)";
-      d["reiniciar"]="processos a reiniciar (fora de job, upload ou live)"}
+      d["reiniciar"]="processos a reiniciar (fora de job, upload ou live)";
+      d["sem-teste"]="testes que não rodaram ou não provam nada (SEM TESTE: repita ou teste de outro jeito)"}
     { n[$1]++; if(!($1 in ex)){ex[$1]=$2; fx[$1]=$3; ord[++k]=$1} }
     END{for(i=1;i<=k;i++){t=ord[i]; printf "   %3d  %s\n        ex.: %s\n        → %s\n", n[t], (t in d?d[t]:t), ex[t], fx[t]}}'
   if [ $COMANDOS = 1 ]; then
@@ -509,9 +630,16 @@ if [ ${#ACH[@]} -gt 0 ]; then
     printf '%s\n' "${ACH[@]}" | awk -F'\t' '!s[$3]++{print "# " $2; print $3}' | sed 's/^/   /'
   else echo "   (use --comandos para ver a lista de comandos de correção, sem executar)"; fi
 fi
-[ "$(id -u)" = 0 ] && [ ${#ACH[@]} -gt 0 ] && echo "   Rodando como root: corrija venvs, Deno e Bun de outros usuários COMO O DONO (sudo -u <usuário> …), senão os arquivos ficam com dono root."
+[ "$EU" = 0 ] && [ ${#ACH[@]} -gt 0 ] && echo "   Rodando como root: corrija venvs, Deno e Bun de outros usuários COMO O DONO (sudo -u <usuário> …), senão os arquivos ficam com dono root."
+# escopo: o que esta rodada não cobriu — a saída 0 vale só dentro disto
+if [ "$EU" = 0 ]; then escopo "usuário: root (binários de usuários testados como o dono, via runuser)"
+else escopo "usuário: $(id -un) (sem root: o que só outros usuários leem ou rodam ficou de fora)"; fi
+[ $PHPOK = 1 ] && [ $N_VER -gt 0 ] && escopo "--php-ok: $N_VER VERIFIQUE do PHP dispensado(s) por você"
+echo "-- escopo desta rodada"
+printf '   %s\n' "${ESC[@]}"
 [ $N_EXP -gt 0 ] && { echo "   Há ferramenta que ainda confia nas chaves comprometidas (ou PHP vulnerável): corrija, reinicie e rode de novo."; exit 1; }
-[ $N_SEM -gt 0 ] && { echo "   Alguns testes não rodaram (rede/DNS/timeout). Repita antes de concluir."; exit 2; }
+[ $N_SEM -gt 0 ] && { echo "   $N_SEM teste(s) não rodaram ou não provam nada (SEM TESTE). Não dá para concluir: repita ou teste de outro jeito."; exit 2; }
 [ $PHPOK = 1 ] && N_VER=0
 [ $((N_REI + N_VER)) -gt 0 ] && { echo "   Nada conecta, mas falta reiniciar processos e/ou conferir o PHP: só termina com tudo zerado."; exit 3; }
+echo "   Tudo zerado nas verificações feitas, dentro do escopo acima. Isso não certifica que a máquina inteira está segura."
 exit 0

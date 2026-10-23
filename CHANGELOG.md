@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## 1.1.2 — 23/10/2026
+
+Correções de uma validação externa: o `audita.sh` 1.1.1 podia terminar limpo sem ter concluído a auditoria.
+
+### audita.sh
+- Teste incompleto nunca passa por limpo: SSH com código fora de 0/1/2/3 (124 tempo, 127 sem bash, 255 sem conexão), container sem shell, sem ferramenta, com tempo esgotado ou com saída cortada (marcador `__FIM_SONDA__`), `php -v` que falha, busca no disco cortada (`find` 124) e `docker ps` sem permissão viram `SEM TESTE` (saída 2).
+- Fim dos falsos "protegido": o curl só conta recusa com código 60/51 (o 77 de lista local que não carregou é `SEM TESTE`); o wget do busybox não usa mais um site de controle — a recusa ambígua só vale como protegida se a lista do sistema (a que o `ssl_client` usa) foi lida e não tem a raiz daquela cadeia.
+- PHP em versão de teste (RC, beta, dev) vira `VERIFIQUE`; linha `info` quando `session.upload_progress.enabled` está ligado (CVE-2026-115560).
+- Execução segura: binário achado no disco só roda se o arquivo, cada link e cada pasta do caminho são do root ou do dono e ninguém mais grava neles (grupo pessoal do dono aceito; sticky aceito em pasta). Com root, o binário de um usuário roda como esse usuário (`runuser`), nunca como root. O que não passa vira `SEM TESTE` com o motivo.
+- Bloco `escopo desta rodada` no fim (`--rapido`, `--sem-docker`, `--raiz`, `--php-ok`, Go sem `--go`, usuário); saída 0 diz que não certifica a máquina inteira.
+- `--raiz DIR` limita a busca no disco. Tag fixada: a correção sugerida agora compara o digest antes de subir a versão.
+- `testes/roda.sh`: 46 casos isolados (stubs de curl, wget, php, ssh, docker, find, id e runuser; node falso que deixa marca quando roda), com controles que devem passar.
+
+### Guia e README (PT/EN/ES)
+- "só leitura" → "não altera nada; é levantamento, não certificado". Saída 0 vale dentro do escopo e não libera deploy sozinha (CI/CD corrigido).
+- Docker: tag fixada não é imutável; o que não muda é o digest.
+- PHP: `memory_limit=-1` reduz, não fecha o caminho; aviso de 23/10 (CVE-2026-115560): manter `session.upload_progress.enabled=0` mesmo depois de atualizar, com o alcance real (só apps que trocam o `serialize_handler` em execução).
+- Tabela: uv 0.13.5, Python 3.15.1 · 3.14.9 · 3.13.17, FreeBSD `ca_root_nss 1.131.1` e base 15.1-p6 · 14.5-p3 · 14.4-p12 (SA-26:73).
+
 ## 1.1.1 — 23/10/2026
 
 - Versão do guia visível na capa (PT/EN/ES) e no topo dos README: "Guia v1.1.1 · atualizado em 23/10/2026".
