@@ -25,6 +25,7 @@
 #   ./audita.sh --comandos              # imprime os comandos de correção sugeridos (NÃO executa nada)
 #   ./audita.sh --go                    # também testa o Go de verdade: compila um teste numa pasta temporária
 #                                       # (grava ~100 MB em $TMPDIR e apaga no fim; por isso é opcional)
+#   ./audita.sh --php-ok                # você já conferiu o backport do PHP no changelog: VERIFIQUE não segura a saída
 #   ./audita.sh --versao
 #
 # Nada é instalado, alterado ou executado como correção. Arquivos só em pasta temporária apagada no fim.
@@ -33,7 +34,7 @@ set -uo pipefail
 
 VERSAO=1.1.0
 CERTIFI_MIN=2026.10.19
-RAPIDO=0; DOCKER=1; COMANDOS=0; GO=0; ALVOS=(); SSH_OPTS=()
+RAPIDO=0; DOCKER=1; COMANDOS=0; GO=0; PHPOK=0; ALVOS=(); SSH_OPTS=()
 while [ $# -gt 0 ]; do case "$1" in
   --ssh) ALVOS+=("$2"); shift 2;;
   --hosts) while IFS= read -r l; do l="${l%%#*}"; l="$(echo "$l" | xargs)"; [ -n "$l" ] && ALVOS+=("$l"); done < "$2"; shift 2;;
@@ -42,9 +43,10 @@ while [ $# -gt 0 ]; do case "$1" in
   --sem-docker) DOCKER=0; shift;;
   --comandos) COMANDOS=1; shift;;
   --go) GO=1; shift;;
+  --php-ok) PHPOK=1; shift;;
   --local) shift;;
   --versao|--version) echo "audita.sh $VERSAO"; exit 0;;
-  -h|--help) sed -n 2,31p "$0"; exit 0;;
+  -h|--help) sed -n 2,32p "$0"; exit 0;;
   *) echo "argumento desconhecido: $1" >&2; exit 64;;
 esac; done
 
@@ -55,7 +57,7 @@ if [ ${#ALVOS[@]} -gt 0 ]; then
   for a in "${ALVOS[@]}"; do
     echo "################ $a"
     flags=(); [ $RAPIDO = 1 ] && flags+=(--rapido); [ $DOCKER = 0 ] && flags+=(--sem-docker)
-    [ $COMANDOS = 1 ] && flags+=(--comandos); [ $GO = 1 ] && flags+=(--go)
+    [ $COMANDOS = 1 ] && flags+=(--comandos); [ $GO = 1 ] && flags+=(--go); [ $PHPOK = 1 ] && flags+=(--php-ok)
     ssh -o BatchMode=yes -o ConnectTimeout=10 ${SSH_OPTS[@]+"${SSH_OPTS[@]}"} "$a" "bash -s -- --local ${flags[*]-}" < "$0"; rc=$?
     [ $rc = 255 ] && { echo "SEM TESTE  ssh  não conectou em $a"; rc=2; }
     [ $rc = 1 ] && pior=1; [ $rc = 2 ] && [ $pior != 1 ] && pior=2; [ $rc = 3 ] && [ $pior = 0 ] && pior=3
@@ -178,6 +180,10 @@ php_ver(){ bin=$1; rot=$2; l=$("$bin" -v 2>/dev/null | head -1); ULT=1
   v=$(echo "$l" | sed -n 's/^PHP \([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p'); [ -n "$v" ] || return 0
   suf=$(echo "$l" | sed -n 's/^PHP [0-9.]*\([^ ]*\).*/\1/p')
   pk=$(de_pacote "$(command -v "$bin" 2>/dev/null || echo "$bin")") && [ -z "$suf" ] && suf=" (pacote $pk)"
+  # Debian/Ubuntu: o changelog local do pacote cita o CVE quando o backport já foi aplicado
+  if [ -n "$pk" ] && [ -f "/usr/share/doc/$pk/changelog.Debian.gz" ] && \
+     gzip -dc "/usr/share/doc/$pk/changelog.Debian.gz" 2>/dev/null | grep -q 'CVE-2026-109618'; then
+    linha 1 "$rot $v$suf" PHP "PHP2Shell: backport no changelog do pacote (CVE-2026-109618)"; return 0; fi
   case "$v" in 8.5.*) m=8.5.12;; 8.4.*) m=8.4.27;; 8.3.*) m=8.3.36;; 8.2.*) m=8.2.35;; *) m=;; esac
   if [ -n "$m" ] && vge "$v" "$m"; then linha 1 "$rot $v$suf" PHP "PHP2Shell: versão corrigida"
   elif [ -z "$m" ] && vge "$v" 8.6; then linha 1 "$rot $v$suf" PHP "PHP2Shell: versão posterior às corrigidas"
@@ -504,5 +510,6 @@ fi
 [ "$(id -u)" = 0 ] && [ ${#ACH[@]} -gt 0 ] && echo "   Rodando como root: corrija venvs, Deno e Bun de outros usuários COMO O DONO (sudo -u <usuário> …), senão os arquivos ficam com dono root."
 [ $N_EXP -gt 0 ] && { echo "   Há ferramenta que ainda confia nas chaves comprometidas (ou PHP vulnerável): corrija, reinicie e rode de novo."; exit 1; }
 [ $N_SEM -gt 0 ] && { echo "   Alguns testes não rodaram (rede/DNS/timeout). Repita antes de concluir."; exit 2; }
+[ $PHPOK = 1 ] && N_VER=0
 [ $((N_REI + N_VER)) -gt 0 ] && { echo "   Nada conecta, mas falta reiniciar processos e/ou conferir o PHP: só termina com tudo zerado."; exit 3; }
 exit 0

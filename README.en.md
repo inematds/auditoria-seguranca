@@ -1,12 +1,12 @@
+# 🛡️ auditoria-seguranca
+
 [![CRITICAL: update your systems](guia/assets/banner-en.jpg)](https://inematds.github.io/auditoria-seguranca/guia/en/)
 
 **🇧🇷 [Português](README.md) · 🇺🇸 [English](README.en.md) · 🇪🇸 [Español](README.es.md)**
 
-# 🛡️ auditoria-seguranca
-
 ## What it is
 
-This is a security guide for anyone running a server, website, automation, or AI agent. In October 2026, two serious pieces of news arrived together: the private keys of 8 certificates from the certificate authority eMudhra leaked (one of them was literally number 4), and a PHP flaw, called PHP2Shell, lets attackers break into sites without a password. The guide shows how to test whether each tool is still exposed, using a script that only reads and changes nothing, and how to update each layer. All you need is a terminal on the machine you want to check.
+This is a security guide for anyone running a server, website, automation, or AI agent. In October 2026 two serious pieces of news arrived together: the private keys of 8 certificates from the certificate authority eMudhra leaked (one of them was literally number 4), and a flaw in PHP, called PHP2Shell, lets attackers break into sites without a password. The guide shows how to test whether each tool is still exposed, using a script that only reads and changes nothing, and how to update each layer. All you need is a terminal on the machine you want to check.
 
 ## 📖 User guide
 
@@ -24,30 +24,30 @@ The browser is already protected. Old curl, Python (certifi), Node, Deno, Bun, J
 
 ## ⚠ Before and after updating
 
-> **Before updating anything:** back up (database, volumes, old image with a fallback tag, configuration) and confirm the system is healthy **before**.
+> **Before updating anything:** make a backup (database, volumes, old image with a fallback tag, configuration) and confirm the system is healthy **before**.
 >
 > ```bash
 > docker exec meu-postgres pg_dumpall -U postgres > backup-$(date +%F).sql   # database
 > docker tag meuapp:latest meuapp:pre-update                              # old image as a fallback
 > docker inspect meuapp > meuapp.inspect.json                             # ports, env, volumes
 > curl -fsS https://meusite/health && echo OK                             # health before
-> docker exec meu-postgres psql -U postgres -d app -c "select count(*) from clientes"   # note the numbers
+> docker exec meu-postgres psql -U postgres -d app -c "select count(*) from clientes"   # write down the numbers
 > ```
 >
-> **After updating:** a lot of what was running may become incompatible with the new version (we saw an unpinned dependency break an app, a venv resync undo the fix, a proxy with an old address returning 502). Test and validate: the service came up, responds, does what it used to do, and the data is there (same counts). Only call it done when it is ok **and live**.
+> **After updating:** a lot of what was running can become incompatible with the new version (we saw an unpinned dependency break an app, a venv resync undo the fix, a proxy with an old address returning 502). Test and validate: the service came up, responds, does what it did before, and the data is there (same counts). Only call it done when it is ok **and live**.
 
 ## The `audita.sh` script (read-only) — version 1.1.0
 
-Tests the **real connection** (not just a list of certificates) with curl, wget, every Node, Deno, and Bun on disk (including the embedded ones), the system Python, each venv and conda environment with its own certifi, and each running Docker container. It also checks Java's list (`cacerts`, via `keytool`), the PHP version on the server and in containers (PHP2Shell), and the processes that need to be restarted. At the end, it groups what it found by type with the suggested fix.
+It tests the **real connection** (not just a list of certificates) with curl, wget, every Node, Deno, and Bun on disk (including embedded ones), the system Python, every venv and conda environment with its own certifi, and every running Docker container. It also checks Java's list (`cacerts`, via `keytool`), the PHP version on the server and in containers (PHP2Shell), and the processes that need to be restarted. At the end, it groups what it found by type with the suggested fix.
 
-States: `EXPOSTO` (EXPOSED — it connected), `protegido` (protected — certificate error), `SEM TESTE` (NOT TESTED — network/DNS/timeout — does not count as protected), `VERIFIQUE` (CHECK — distribution PHP below the fixed version: check the backport), and `REINICIE` (RESTART — process running with the old program or list).
+States: `EXPOSTO` (EXPOSED — it connected), `protegido` (protected — certificate error), `SEM TESTE` (NOT TESTED — network/DNS/timeout — does not count as protected), `VERIFIQUE` (CHECK — distribution PHP below the fixed version: check the backport) and `REINICIE` (RESTART — process running with the old program or list).
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/inematds/auditoria-seguranca/main/audita.sh
 less audita.sh                              # read it before running
 chmod +x audita.sh
 ./audita.sh                                 # this machine (up to 3 min)
-./audita.sh --rapido                        # no disk search
+./audita.sh --rapido                        # without disk search
 ./audita.sh --comandos                      # lists the fix commands (does not run them)
 ./audita.sh --go                            # real Go test (compiles in a temp folder, ~100 MB, deleted at the end)
 ./audita.sh --ssh root@servidor1 --ssh deploy@servidor2
@@ -55,13 +55,13 @@ chmod +x audita.sh
 ./audita.sh --hosts servidores.txt          # one SSH target per line
 ```
 
-Exit codes: `0` all clear · `1` there is EXPOSTO · `2` a test did not run · `3` processes need a restart or PHP needs checking. The script never installs, changes, or fixes anything; it only writes to a temp folder deleted at the end.
+Exit code: `0` everything at zero · `1` there is EXPOSTO · `2` some test did not run · `3` processes need restarting or PHP needs checking. The script never installs, changes, or fixes anything; it only writes to a temp folder that is deleted at the end.
 
 ## Fixed versions (eMudhra)
 
 | Layer | Version |
 |---|---|
-| Ubuntu | `20260816ubuntu0.<Ubuntu version>` (e.g., `20260816ubuntu0.24.04.1`) |
+| Ubuntu | `20260816ubuntu0.<Ubuntu version>` (e.g. `20260816ubuntu0.24.04.1`) |
 | Debian | `20250419~deb12u2` (12) · `20250419+deb13u1` (13) |
 | Alpine | `20261020-r0` |
 | Python | `certifi 2026.10.19` · `pip 26.2.2` · `uv 0.13.4` |
@@ -83,17 +83,17 @@ Exit codes: `0` all clear · `1` there is EXPOSTO · `2` a test did not run · `
 |---|---|---|---|
 | 1 | Quick curl test on both chains | `curl https://dv-g3b-emudhra.we-have-a-problem.com/` | 🧠 you |
 | 2 | Full audit of the machine, with the list of fixes | `./audita.sh --comandos` | ⚙️ script |
-| 3 | Audit of the servers | `./audita.sh --hosts servidores.txt` | ⚙️ script |
-| 4 | Backup (database, volumes, old image with a fallback tag, configuration) and health BEFORE | `pg_dumpall` · `docker tag <img> <img>:pre-update` · `docker inspect > x.json` · `curl -fsS …/health` | 🧠 you |
-| 5 | Update the system (and Java's `cacerts`) | `sudo apt install --only-upgrade ca-certificates` · `sudo keytool -delete -alias … -keystore /etc/ssl/certs/java/cacerts` | 🧠 you |
-| 6 | Update certifi in each venv / conda | `<venv>/bin/python -m pip install -U certifi` · `uv pip install --python <venv>/bin/python -U certifi` | 🧠 you |
-| 7 | Switch Node (20 → 22/24), update Deno and Bun | `nvm install 22` · `sudo apt install --only-upgrade nodejs` · `deno upgrade` · `bun upgrade` | 🧠 you |
-| 8 | Containers by group: A pull and recreate · B layer on top · C bump the version / Supabase | `docker compose up -d --pull always <svc>` · `FROM <img>:pre-emudhra` · `supabase stop && supabase start` | 🧠 you |
-| 9 | Find and restart services (outside jobs/uploads/lives) | `processos a reiniciar` section of the script · `systemctl restart …` · `pm2 restart all` | 🧠 you |
-| 10 | Test and validate: it came up, responds, does what it used to, same data (counts); only close when ok and live | `docker compose ps` · `curl -fsS …/health` · `select count(*)` | 🧠 you |
-| 11 | Audit again until it reaches zero | `./audita.sh` → `0 EXPOSTO · 0 SEM TESTE` | ⚙️ script |
-| 12 | PHP: test, update, restart workers (server and containers) | `node phpcheck.js https://seusite` · `sudo apt install --only-upgrade $(dpkg -l 'php*' \| awk '/^ii/{print $2}')` | 🧠 you |
-| 13 | Monthly routine | checklist in the Routine section of the guide | 🧠 you |
+| 3 | Audit the servers | `./audita.sh --hosts servidores.txt` | ⚙️ script |
+| 4 | PHP2Shell first (attacks in progress): test, update, restart workers (server and containers) | `node phpcheck.js https://seusite` · `sudo apt install --only-upgrade $(dpkg -l 'php*' \| awk '/^ii/{print $2}')` | 🧠 you |
+| 5 | Backup (database, volumes, old image with a fallback tag, configuration) and health BEFORE | `pg_dumpall` · `docker tag <img> <img>:pre-update` · `docker inspect > x.json` · `curl -fsS …/health` | 🧠 you |
+| 6 | Update the system (and Java's `cacerts`) | `sudo apt install --only-upgrade ca-certificates` · `sudo keytool -delete -alias … -keystore /etc/ssl/certs/java/cacerts` | 🧠 you |
+| 7 | Update the certifi of each venv / conda | `<venv>/bin/python -m pip install -U certifi` · `uv pip install --python <venv>/bin/python -U certifi` | 🧠 you |
+| 8 | Switch Node (20 → 22/24), update Deno and Bun | `nvm install 22` · `sudo apt install --only-upgrade nodejs` · `deno upgrade` · `bun upgrade` | 🧠 you |
+| 9 | Containers by group: A pull and recreate · B layer on top · C bump the version / Supabase | `docker compose up -d --pull always <svc>` · `FROM <img>:pre-emudhra` · `pg_dumpall` + `npx -y supabase@latest stop && npx -y supabase@latest start` | 🧠 you |
+| 10 | Find and restart services (outside jobs/uploads/lives) | `processos a reiniciar` section of the script · `systemctl restart …` · `pm2 restart all` | 🧠 you |
+| 11 | Test and validate: it came up, responds, does what it did, same data (counts); only done when ok and live | `docker compose ps` · `curl -fsS …/health` · `select count(*)` | 🧠 you |
+| 12 | Audit again until zero (full pass) | `./audita.sh` → `0 EXPOSTO · 0 SEM TESTE · 0 VERIFIQUE · 0 REINICIE` (exit 0; package PHP checked: `--php-ok`) | ⚙️ script |
+| 13 | Monthly routine | checklist in the guide's Routine section | 🧠 you |
 
 The version history is in [CHANGELOG.md](CHANGELOG.md).
 

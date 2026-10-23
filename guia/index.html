@@ -224,7 +224,7 @@ except Exception as e: print('protegido' if 'CERTIFICATE_VERIFY_FAILED' in str(e
 
   <div class="step"><div class="b">1</div><div>
     <h3>Baixe o script e leia antes de rodar</h3>
-    <p>Regra de ouro: nunca rode script da internet sem olhar o que ele faz. Este tem cerca de 480 linhas, comentadas.</p>
+    <p>Regra de ouro: nunca rode script da internet sem olhar o que ele faz. Este tem cerca de 500 linhas, comentadas.</p>
 <pre><span class="k">curl</span> -fsSLO <span class="s">https://raw.githubusercontent.com/inematds/auditoria-seguranca/main/audita.sh</span>
 <span class="k">less</span> audita.sh            <span class="c"># leia</span>
 <span class="k">chmod</span> +x audita.sh</pre>
@@ -287,7 +287,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
       <li><b>EXPOSTO</b>: conectou (ou, no Java, a lista ainda tem as raízes; no PHP, a versão é vulnerável). Corrija essa camada (seção <a href="#atualizar">Atualizar</a>).</li>
       <li><b>protegido</b>: recusou por erro de certificado.</li>
       <li><b>SEM TESTE</b>: não deu para testar (rede, DNS, timeout). Repita antes de concluir.</li>
-      <li><b>VERIFIQUE</b>: PHP abaixo da versão corrigida, mas com número da distribuição (pode ter a correção por backport). Confira no changelog.</li>
+      <li><b>VERIFIQUE</b>: PHP abaixo da versão corrigida, mas com número da distribuição (pode ter a correção por backport). No Debian/Ubuntu o script já procura o CVE no changelog local do pacote; se não achar, confira com <code>apt changelog &lt;pacote&gt; | grep CVE-2026-109618</code>. Conferido e corrigido? Rode com <code>--php-ok</code> e o VERIFIQUE deixa de segurar a saída.</li>
       <li><b>REINICIE</b>: processo que começou antes da correção e ainda usa o programa ou a lista antiga. Veja <a href="#reiniciar">quem reiniciar</a>.</li>
     </ul>
     <p>No fim vem o bloco <b>o que corrigir, por tipo</b>: quantos itens de cada tipo, um exemplo e o comando sugerido. O resumo conta linhas (cada ferramenta aparece duas vezes, G3 e AAA); o bloco conta itens. Com <code>--comandos</code> sai a lista completa, um comando por item, para você revisar e rodar um por um. O script nunca executa a correção.</p>
@@ -414,7 +414,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 <span class="k">sudo cp -a /etc/ssl/certs/java/cacerts /etc/ssl/certs/java/cacerts.bak</span>
 <span class="k">sudo keytool -delete -alias debian:emsign_ecc_root_ca_-_g3.pem -keystore /etc/ssl/certs/java/cacerts -storepass changeit</span>
 <span class="k">sudo keytool -delete -alias debian:comodo_aaa_services_root.pem -keystore /etc/ssl/certs/java/cacerts -storepass changeit</span></pre>
-    <div class="nota"><b>Só <code>update-ca-certificates -f</code> não basta.</b> No nosso teste ele regravou o arquivo, mas as duas raízes continuaram lá, mesmo com o sistema já corrigido. Por isso a remoção é feita à mão, com o <code>keytool -delete</code> acima. Os nomes (<code>debian:…</code>) são os do Debian/Ubuntu; em outro JDK, use o nome que o <code>keytool -list</code> mostrar. Depois rode o teste de novo: tem que dar <code>limpo</code>. O sistema corrigido já tirou essas duas raízes da lista dele; o <code>cacerts</code> só ficou para trás. Se algum site parar de abrir num programa Java depois disso, atualize o JDK e o <code>ca-certificates-java</code> em vez de devolver a raiz. Lembre: no Java o <code>audita.sh</code> confere a lista, não faz conexão.</div>
+    <div class="nota"><b>Só <code>update-ca-certificates -f</code> não basta.</b> No nosso teste ele regravou o arquivo, mas as duas raízes continuaram lá, mesmo com o sistema já corrigido. Por isso a remoção é feita à mão, com o <code>keytool -delete</code> acima. Os nomes (<code>debian:…</code>) são os do Debian/Ubuntu; em outro JDK, use o nome que o <code>keytool -list</code> mostrar. Depois rode o teste de novo: tem que dar <code>limpo</code>. O sistema corrigido já tirou essas duas raízes da lista dele (confira: <code>grep -iE "emSign_ECC_Root_CA_-_G3|Comodo_AAA" /etc/ca-certificates.conf</code> mostra as duas com <code>!</code> na frente, que quer dizer "desconfiar"); o <code>cacerts</code> só ficou para trás. Só remova do Java depois de ver isso. Se algum site parar de abrir num programa Java depois disso, atualize o JDK e o <code>ca-certificates-java</code> em vez de devolver a raiz. Lembre: no Java o <code>audita.sh</code> confere a lista, não faz conexão.</div>
     <p>JDK com <code>cacerts</code> próprio (baixado à parte, dentro de uma IDE, num <code>/opt</code>): atualize o JDK. <code>changeit</code> é a senha padrão do arquivo, pública; ela só protege contra gravação acidental. Depois, reinicie os programas Java.</p>
   </div></div>
 
@@ -443,10 +443,11 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 
     <h3 style="margin-top:22px">Grupo A: puxe e recrie</h3>
 <pre><span class="k">docker compose up -d --pull always redis</span>      <span class="c"># um serviço; repita para os outros</span>
-<span class="k">docker compose pull && docker compose up -d</span>   <span class="c"># todos de uma vez</span>
+<span class="k">docker compose pull && docker compose up -d</span>   <span class="c"># todos de uma vez (veja o aviso sobre bancos abaixo)</span>
 <span class="c"># prova: o pacote da lista dentro do container (Alpine)</span>
-<span class="k">docker exec redis apk list -I ca-certificates-bundle</span>   <span class="c"># 20261020-r0 ou mais</span></pre>
+<span class="k">docker compose exec redis apk list -I ca-certificates-bundle</span>   <span class="c"># 20261020-r0 ou mais</span></pre>
     <p>Testando à mão com o <code>wget</code> do busybox (Alpine), a recusa aparece como <code>ssl_client: SSL_connect</code> ou <code>Connection reset by peer</code>, que parece erro de rede. Para ter certeza, teste um site bom com o mesmo wget (<code>wget -O /dev/null https://www.google.com/</code>): se esse abre, a falha do site de teste foi de certificado. O <code>audita.sh</code> já faz essa conferência.</p>
+    <div class="nota red"><b>Banco com tag <code>latest</code> ou sem versão principal</b> (<code>postgres:latest</code>, <code>mysql:latest</code>, <code>mongo</code>): o pull pode trazer uma versão principal nova (ex.: Postgres 16 → 18), que não abre o diretório de dados antigo. Antes do pull, fixe a versão principal que você usa hoje (<code>postgres:16-alpine</code>) e faça o <code>pg_dumpall</code>.</div>
     <ul>
       <li><b>Container sem compose</b> (criado com <code>docker run</code>): salve a receita antes, <code>docker inspect redis > redis.inspect.json</code>, e olhe <code>.Mounts</code>. Sem volume, os dados morrem com o container: no Redis, <code>redis-cli save</code> e <code>docker cp redis:/data/dump.rdb .</code> antes; depois suba o novo com as mesmas portas e variáveis e devolva o arquivo.</li>
       <li><b>Imagem nova já no disco, container antigo rodando</b>: acontece quando outro projeto puxou a mesma tag. Não precisa baixar nada, só recriar (<code>docker compose up -d &lt;serviço&gt;</code>). O <code>audita.sh</code> mostra esses como "só recriar".</li>
@@ -511,7 +512,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 <span class="c">#    image: n8nio/n8n:2.44.6   (ou mais nova; confira as notas de versão)</span>
 <span class="c"># 4) atualize</span>
 <span class="k">docker compose pull n8n && docker compose up -d n8n</span>
-<span class="k">docker exec n8n node -v</span>                     <span class="c"># confirme o Node novo</span></pre>
+<span class="k">docker compose exec n8n node -v</span>                     <span class="c"># confirme o Node novo</span></pre>
     <p>Sem trocar a tag fixada, o <code>pull</code> traz a mesma imagem e nada muda.</p>
     <div class="nota"><b>Armadilha do docker-compose antigo (1.29):</b> ao subir a imagem nova ele pode falhar com <code>KeyError: 'ContainerConfig'</code> e deixar o n8n parado. Remova o container antigo antes (os dados ficam no volume): <code>docker-compose rm -f -s n8n && docker-compose up -d n8n</code>. Melhor ainda: migre para o <code>docker compose</code> v2.</div>
     <p>Outros jeitos de guardar os dados: se o n8n usa uma pasta montada (ex.: <code>./n8n_data</code> ou <code>~/.n8n</code>), copie a pasta com ele parado; se usa Postgres, faça o <code>pg_dump</code> do banco. Em todos os casos guarde junto a chave de criptografia (<code>N8N_ENCRYPTION_KEY</code> ou o arquivo <code>config</code> da pasta do n8n): sem ela as credenciais salvas não voltam.</p>
@@ -551,7 +552,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
   </div></div>
   <div class="nota red" style="margin-top:34px">
     <h3 style="margin-top:0">⚠ Antes de dar por encerrado: valide</h3>
-    <p>Atualizou? Confira, serviço por serviço: subiu (<code>docker compose ps</code>, <code>systemctl status</code>), responde (<code>curl -fsS https://meusite/health</code>), faz o que fazia (abra, faça login, rode um fluxo) e os dados estão lá (as mesmas contagens de antes). Deu errado: volte com o backup (<code>docker tag meuapp:pre-update meuapp:latest && docker compose up -d meuapp</code>). E rode o <code>audita.sh</code> de novo. Só termina quando estiver ok <b>e no ar</b>.</p>
+    <p>Atualizou? Confira, serviço por serviço: subiu (<code>docker compose ps</code>, <code>systemctl status</code>), responde (<code>curl -fsS https://meusite/health</code>), faz o que fazia (abra, faça login, rode um fluxo) e os dados estão lá (as mesmas contagens de antes). Deu errado: volte com a imagem de reserva (<code>docker tag meuapp:pre-update meuapp:latest && docker compose up -d meuapp</code>). Atenção: se a versão nova já migrou o banco (n8n, Postgres, apps com migração), a imagem antiga não abre o banco migrado: aí a volta é restaurar o backup do volume ou o dump junto com a imagem antiga. Em salto grande de versão, teste antes numa cópia do volume. E rode o <code>audita.sh</code> de novo. Só termina quando estiver ok <b>e no ar</b>.</p>
   </div>
 </div></section>
 
