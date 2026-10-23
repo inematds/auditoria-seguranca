@@ -165,7 +165,7 @@
 
 <section id="resumo" class="resumo"><div class="wrap">
   <span class="chip">In short</span>
-  <p>This is a security guide for anyone running a server, website, automation, or AI agent. In October 2026, two serious pieces of news arrived together: the secret keys of 8 certificates from the certificate authority eMudhra leaked (one of them was literally the number 4), and a flaw in PHP, called PHP2Shell, lets attackers break into sites without a password. The guide shows how to test whether each tool is still exposed, using a script that only reads and changes nothing, and how to update each layer. All you need is a terminal on the machine you want to check.</p>
+  <p>This is a security guide for anyone running a server, website, automation, or AI agent. In October 2026, two serious pieces of news arrived together: the secret keys of 8 certificates from the certificate authority eMudhra leaked (one of them was literally the number 4), and a flaw in PHP, called PHP2Shell, lets attackers break into sites without a password. The guide shows how to test whether each tool is still exposed, using a script that installs and changes nothing (it only runs the tests), and how to update each layer. All you need is a terminal on the machine you want to check.</p>
 </div></section>
 
 <!-- ===================================================== O QUE HOUVE -->
@@ -223,11 +223,11 @@ except Exception as e: print('protegido' if 'CERTIFICATE_VERIFY_FAILED' in str(e
   <div class="nota red"><b>Test both chains.</b> In our audit, several tools rejected the <code>AAA</code> chain and accepted the <code>G3</code> chain (or the other way around). A single test can give a false sense of security. And a network error (DNS, timeout) is <b>not</b> "protected": it's "no test".</div>
 
   <h3 class="bloco">The <code>audita.sh</code> script: everything at once, changes nothing</h3>
-  <p class="mut" style="max-width:70ch">It tests the real connection with curl, wget, every Node, Deno, and Bun found on disk (including the ones bundled inside tools), the system Python, every Python environment (venv) with its own certifi, and, from the inside, every running Docker container. It checks the Java list (the <code>cacerts</code> file), the PHP version on the server and in containers (PHP2Shell), outdated certifi, and processes that need to be restarted. At the end, it groups what it found by type, with the fix for each. It doesn't install, change, or fix anything, but it <b>runs</b> the tools it tests (that's how it proves the connection). It's a survey: it points out problems; it doesn't certify that the machine is safe.</p>
+  <p class="mut" style="max-width:70ch">It tests the real connection with curl, wget, every Node, Deno, and Bun found on disk (including the ones bundled inside tools), the system Python, each Python environment (venv or conda) with its own certifi, and, from the inside, every running Docker container. It checks the Java list (the <code>cacerts</code> file), the PHP version on the server and in containers (PHP2Shell), outdated certifi, and processes that need to be restarted. At the end, it groups what it found by type, with the fix for each. It doesn't install, change, or fix anything, but it <b>runs</b> the tools it tests (that's how it proves the connection). It's a survey: it points out problems; it doesn't certify that the machine is safe.</p>
 
   <div class="step"><div class="b">1</div><div>
     <h3>Download the script and read it before running</h3>
-    <p>Golden rule: never run a script from the internet without looking at what it does. This one is about 500 lines long, with comments.</p>
+    <p>Golden rule: never run a script from the internet without looking at what it does. This one has about 650 lines, commented.</p>
 <pre><span class="k">curl</span> -fsSLO <span class="s">https://raw.githubusercontent.com/inematds/auditoria-seguranca/main/audita.sh</span>
 <span class="k">less</span> audita.sh            <span class="c"># read it</span>
 <span class="k">chmod</span> +x audita.sh</pre>
@@ -251,7 +251,7 @@ except Exception as e: print('protegido' if 'CERTIFICATE_VERIFY_FAILED' in str(e
 
   <div class="step"><div class="b">3</div><div>
     <h3>Read the result: five states</h3>
-<pre>== meuservidor · Ubuntu 24.04.3 LTS · 23/10/2026 02:36 · audita.sh 1.1.0
+<pre>== meuservidor · Ubuntu 24.04.3 LTS · 23/10/2026 02:36 · audita.sh 1.1.2
 -- versões
 ca-certificates 20260816ubuntu0.24.04.1
 -- conexão real (G3 = cadeia emSign ECC Root CA - G3 · AAA = cadeia cruzada AAA Certificate Services)
@@ -310,7 +310,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 
 <span class="c"># specific SSH key (applies to all destinations)</span>
 <span class="k">./audita.sh</span> --chave ~/.ssh/minha_chave --ssh root@servidor1</pre>
-    <p>If SSH doesn't connect or drops midway (timeout, <code>bash</code> missing there), the line says <code>SEM TESTE</code> (NO TEST) with the code and the exit is not 0: a server that didn't respond never passes as clean.</p>
+    <p>If SSH doesn't connect or drops midway (timeout, <code>bash</code> missing there), the line says <code>SEM TESTE</code> (NO TEST) with the code and the exit is not 0: a server that did not respond never passes as clean. Example <code>servidores.txt</code>: one line <code>root@203.0.113.10</code>, another <code>deploy@vps2   # loja</code>. There, the script runs as the SSH user: to see the containers and the folders of other users, log in as root (or as a user in the <code>docker</code> group).</p>
   </div></div>
 
   <div class="step"><div class="b">5</div><div>
@@ -446,7 +446,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
       <div class="card"><h3>C · Pinned version</h3><p><code>kong:2.8.1</code>, <code>gotrue:v2.197.0</code>. A tag changes little, but it isn't immutable: the vendor can republish the same tag with the fixed base (what never changes is the digest, <code>sha256:…</code>). Pull again and compare the digest; if it didn't change or it's still EXPOSTO, bump the version, and sometimes wait for the vendor.</p></div>
     </div>
 
-    <p>A container without curl, wget, Node, or Python (e.g., <code>postgres:16</code> Debian) shows up as "no network tool": the script has no way to test the connection. Check the list through the package (<code>docker exec &lt;c&gt; dpkg-query -W ca-certificates</code> or <code>apk list -I ca-certificates-bundle</code>) and compare it with the version table.</p>
+    <p>A container without curl, wget, Node, or Python (e.g., <code>postgres:16</code> Debian) shows up as <code>SEM TESTE</code> "nenhuma ferramenta de teste" (no test tool) (counts as a test that did not run, and the exit code is not 0): the script has no way to test the connection. Check the list through the package (<code>docker exec &lt;c&gt; dpkg-query -W ca-certificates</code> or <code>apk list -I ca-certificates-bundle</code>) and compare it with the version table.</p>
 
     <h3 style="margin-top:22px">Group A: pull and recreate</h3>
 <pre><span class="k">docker compose up -d --pull always redis</span>      <span class="c"># one service; repeat for the others</span>

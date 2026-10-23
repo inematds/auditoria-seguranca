@@ -165,7 +165,7 @@
 
 <section id="resumo" class="resumo"><div class="wrap">
   <span class="chip">En resumen</span>
-  <p>Esta es una guía de seguridad para quien tiene un servidor, un sitio, una automatización o un agente de IA en funcionamiento. En octubre de 2026 llegaron juntas dos noticias graves: se filtraron las claves secretas de 8 certificados de la autoridad certificadora eMudhra (una de ellas era literalmente el número 4), y una falla en PHP, llamada PHP2Shell, permite invadir sitios sin contraseña. La guía muestra cómo probar si cada herramienta sigue expuesta, con un script que solo lee y no cambia nada, y cómo actualizar cada capa. Solo necesitas una terminal en la máquina que quieres revisar.</p>
+  <p>Esta es una guía de seguridad para quien tiene un servidor, un sitio, una automatización o un agente de IA en funcionamiento. En octubre de 2026 llegaron juntas dos noticias graves: se filtraron las claves secretas de 8 certificados de la autoridad certificadora eMudhra (una de ellas era literalmente el número 4), y una falla en PHP, llamada PHP2Shell, permite invadir sitios sin contraseña. La guía muestra cómo probar si cada herramienta sigue expuesta, con un script que no instala ni modifica nada (solo ejecuta las pruebas), y cómo actualizar cada capa. Solo necesitas una terminal en la máquina que quieres revisar.</p>
 </div></section>
 
 <!-- ===================================================== O QUE HOUVE -->
@@ -223,11 +223,11 @@ except Exception as e: print('protegido' if 'CERTIFICATE_VERIFY_FAILED' in str(e
   <div class="nota red"><b>Prueba las dos cadenas.</b> En nuestra auditoría, varias herramientas rechazaban la cadena <code>AAA</code> y aceptaban la <code>G3</code> (o al revés). Una sola prueba puede darte una falsa sensación de seguridad. Y un error de red (DNS, timeout) <b>no</b> es "protegido": es "sin prueba".</div>
 
   <h3 class="bloco">El script <code>audita.sh</code>: todo de una vez, sin alterar nada</h3>
-  <p class="mut" style="max-width:70ch">Prueba la conexión real con curl, wget, cada Node, Deno y Bun que encuentre en el disco (incluso los embebidos en otras herramientas), el Python del sistema, cada entorno Python (venv) con su propio certifi y, por dentro, cada contenedor Docker en ejecución. Revisa la lista de Java (el archivo <code>cacerts</code>), la versión de PHP en el servidor y en los contenedores (PHP2Shell), el certifi desactualizado y los procesos que necesitan reiniciarse. Al final, agrupa lo que encontró por tipo, con la corrección de cada uno. No instala, no altera y no corrige nada, pero <b>ejecuta</b> las herramientas que prueba (así es como comprueba la conexión). Es un relevamiento: señala problemas; no certifica que la máquina esté segura.</p>
+  <p class="mut" style="max-width:70ch">Prueba la conexión real con curl, wget, cada Node, Deno y Bun que encuentre en el disco (incluso los embebidos en otras herramientas), el Python del sistema, cada entorno Python (venv o conda) con su propio certifi y, por dentro, cada contenedor Docker en ejecución. Revisa la lista de Java (el archivo <code>cacerts</code>), la versión de PHP en el servidor y en los contenedores (PHP2Shell), el certifi desactualizado y los procesos que necesitan reiniciarse. Al final, agrupa lo que encontró por tipo, con la corrección de cada uno. No instala, no altera y no corrige nada, pero <b>ejecuta</b> las herramientas que prueba (así es como comprueba la conexión). Es un relevamiento: señala problemas; no certifica que la máquina esté segura.</p>
 
   <div class="step"><div class="b">1</div><div>
     <h3>Descarga el script y léelo antes de ejecutarlo</h3>
-    <p>Regla de oro: nunca ejecutes un script de internet sin mirar qué hace. Este tiene unas 500 líneas, comentadas.</p>
+    <p>Regla de oro: nunca ejecutes un script de internet sin mirar qué hace. Este tiene alrededor de 650 líneas, comentadas.</p>
 <pre><span class="k">curl</span> -fsSLO <span class="s">https://raw.githubusercontent.com/inematds/auditoria-seguranca/main/audita.sh</span>
 <span class="k">less</span> audita.sh            <span class="c"># lee</span>
 <span class="k">chmod</span> +x audita.sh</pre>
@@ -251,7 +251,7 @@ except Exception as e: print('protegido' if 'CERTIFICATE_VERIFY_FAILED' in str(e
 
   <div class="step"><div class="b">3</div><div>
     <h3>Lee el resultado: cinco estados</h3>
-<pre>== meuservidor · Ubuntu 24.04.3 LTS · 23/10/2026 02:36 · audita.sh 1.1.0
+<pre>== meuservidor · Ubuntu 24.04.3 LTS · 23/10/2026 02:36 · audita.sh 1.1.2
 -- versões
 ca-certificates 20260816ubuntu0.24.04.1
 -- conexão real (G3 = cadeia emSign ECC Root CA - G3 · AAA = cadeia cruzada AAA Certificate Services)
@@ -310,7 +310,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
 
 <span class="c"># llave SSH específica (vale para todos los destinos)</span>
 <span class="k">./audita.sh</span> --chave ~/.ssh/minha_chave --ssh root@servidor1</pre>
-    <p>Si el SSH no conecta o se cae a la mitad (tiempo agotado, <code>bash</code> ausente allá), la línea dice <code>SEM TESTE</code> con el código y la salida no es 0: un servidor que no respondió nunca pasa como limpio.</p>
+    <p>Si el SSH no conecta o se cae a la mitad (tiempo agotado, <code>bash</code> ausente allá), la línea dice <code>SEM TESTE</code> con el código y la salida no es 0: un servidor que no respondió nunca pasa como limpio. Ejemplo de <code>servidores.txt</code>: una línea <code>root@203.0.113.10</code>, otra <code>deploy@vps2   # loja</code>. Allí, el script se ejecuta con el usuario del SSH: para ver los contenedores y las carpetas de otros usuarios, entra como root (o con un usuario del grupo <code>docker</code>).</p>
   </div></div>
 
   <div class="step"><div class="b">5</div><div>
@@ -446,7 +446,7 @@ REINICIE   pid 3361     meubot.service (sistema)           /usr/bin/node dist/in
       <div class="card"><h3>C · Versión fija</h3><p><code>kong:2.8.1</code>, <code>gotrue:v2.197.0</code>. La etiqueta cambia poco, pero no es inmutable: el proveedor puede republicar la misma etiqueta con la base corregida (lo que nunca cambia es el digest, <code>sha256:…</code>). Haz pull otra vez y compara el digest; si no cambió o sigue EXPOSTO, sube la versión, y a veces espera al proveedor.</p></div>
     </div>
 
-    <p>Un contenedor sin curl, wget, Node ni Python (ej.: <code>postgres:16</code> Debian) aparece como "ninguna herramienta de red": el script no tiene cómo probar la conexión. Comprueba la lista por el paquete (<code>docker exec &lt;c&gt; dpkg-query -W ca-certificates</code> o <code>apk list -I ca-certificates-bundle</code>) y compárala con la tabla de versiones.</p>
+    <p>Un contenedor sin curl, wget, Node ni Python (ej.: <code>postgres:16</code> Debian) aparece como <code>SEM TESTE</code> "nenhuma ferramenta de teste" (ninguna herramienta de prueba) (cuenta como prueba que no se ejecutó, y la salida no es 0): el script no tiene cómo probar la conexión. Comprueba la lista por el paquete (<code>docker exec &lt;c&gt; dpkg-query -W ca-certificates</code> o <code>apk list -I ca-certificates-bundle</code>) y compárala con la tabla de versiones.</p>
 
     <h3 style="margin-top:22px">Grupo A: haz pull y recrea</h3>
 <pre><span class="k">docker compose up -d --pull always redis</span>      <span class="c"># un servicio; repite para los demás</span>
