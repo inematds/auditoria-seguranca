@@ -143,16 +143,20 @@ NODES=(); command -v node >/dev/null 2>&1 && NODES+=("$(readlink -f "$(command -
 PYS=(); CERTIFIS=()
 if [ $RAPIDO = 0 ]; then
   echo "   (procurando venvs, Node e certifi no disco — até 3 min; use --rapido para pular)"
+  # / e, se estiverem em outra partição, /home /opt /srv /var/www /root (o -xdev não cruza partições)
+  RAIZES=(/); for m in /home /opt /srv /var/www /root; do mountpoint -q "$m" 2>/dev/null && RAIZES+=("$m"); done
   while IFS= read -r f; do
     case "$f" in
       */pyvenv.cfg) d=${f%/pyvenv.cfg}; [ -x "$d/bin/python" ] && PYS+=("$d/bin/python");;
       */certifi-*.dist-info) CERTIFIS+=("$f");;
       */node) head -c4 "$f" 2>/dev/null | grep -q ELF && NODES+=("$(readlink -f "$f")");;
     esac
-  done < <(timeout 180 find / -xdev \( -path /proc -o -path /sys -o -path '*/Trash/*' -o -path '*/.cache/uv' -o -path '*/.local/share/Trash' -o -path /var/lib/docker \) -prune -o \
+  done < <(timeout 180 find "${RAIZES[@]}" -xdev \( -path /proc -o -path /sys -o -path '*/Trash/*' -o -path '*/.cache/uv' -o -path '*/.local/share/Trash' -o -path /var/lib/docker \) -prune -o \
             \( -name pyvenv.cfg -o -name 'certifi-*.dist-info' -o \( -type f -name node -perm -u+x \) \) -print 2>/dev/null)
 fi
 mapfile -t NODES < <(printf '%s\n' "${NODES[@]}" | awk 'NF && !s[$0]++')
+[ ${#PYS[@]} -gt 0 ] && mapfile -t PYS < <(printf '%s\n' "${PYS[@]}" | awk 'NF && !s[$0]++')
+[ ${#CERTIFIS[@]} -gt 0 ] && mapfile -t CERTIFIS < <(printf '%s\n' "${CERTIFIS[@]}" | awk 'NF && !s[$0]++')
 for n in "${NODES[@]}"; do
   v=$("$n" -v 2>/dev/null) || continue
   duas "node $v $(echo "$n" | sed "s|^$HOME|~|")" t_node "$n"

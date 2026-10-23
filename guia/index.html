@@ -204,11 +204,14 @@
 <span class="c"># "SSL certificate problem" = protegido</span>
 <span class="c"># mostrou a página        = EXPOSTO</span></pre></div>
     <div class="card"><h3>Node e Python, do mesmo jeito</h3>
-<pre><span class="k">node</span> -e <span class="s">"require('https').get('https://dv-g3b-emudhra.we-have-a-problem.com/',()=>console.log('EXPOSTO')).on('error',e=>console.log('protegido?',e.code))"</span>
-<span class="c"># EXPOSTO · ou "protegido? UNABLE_TO_GET_ISSUER_CERT_LOCALLY" (código de certificado)</span>
+<pre><span class="k">node</span> -e <span class="s">"require('https').get('https://dv-g3b-emudhra.we-have-a-problem.com/',r=>{console.log('EXPOSTO');process.exit()}).on('error',e=>{console.log(/CERT|ISSUER/.test(e.code)?'protegido':'SEM TESTE',e.code);process.exit()})"</span>
 
-<span class="k">python3</span> -c <span class="s">"import certifi,ssl,urllib.request as u
-try: u.urlopen('https://dv-g3b-emudhra.we-have-a-problem.com/',context=ssl.create_default_context(cafile=certifi.where())); print('EXPOSTO')
+<span class="k">python3</span> -c <span class="s">"import ssl,urllib.request as u,urllib.error as E
+try:
+  import certifi; ctx=ssl.create_default_context(cafile=certifi.where())
+except ImportError: ctx=ssl.create_default_context()
+try: u.urlopen('https://dv-g3b-emudhra.we-have-a-problem.com/',context=ctx); print('EXPOSTO')
+except E.HTTPError: print('EXPOSTO')
 except Exception as e: print('protegido' if 'CERTIFICATE_VERIFY_FAILED' in str(e) else 'SEM TESTE', e)"</span></pre>
     <p style="margin-top:.6em">Erro de rede (ENOTFOUND, timeout) não é "protegido". Na dúvida, use o <code>audita.sh</code>.</p></div>
   </div>
@@ -221,7 +224,7 @@ except Exception as e: print('protegido' if 'CERTIFICATE_VERIFY_FAILED' in str(e
 
   <div class="step"><div class="b">1</div><div>
     <h3>Baixe o script e leia antes de rodar</h3>
-    <p>Regra de ouro: nunca rode script da internet sem olhar o que ele faz. Este tem cerca de 200 linhas comentadas.</p>
+    <p>Regra de ouro: nunca rode script da internet sem olhar o que ele faz. Este tem cerca de 200 linhas, comentadas.</p>
 <pre><span class="k">curl</span> -fsSLO <span class="s">https://raw.githubusercontent.com/inematds/auditoria-seguranca/main/audita.sh</span>
 <span class="k">less</span> audita.sh            <span class="c"># leia</span>
 <span class="k">chmod</span> +x audita.sh</pre>
@@ -260,7 +263,7 @@ ca-certificates 20260816ubuntu0.24.04.1
    <span class="r">EXPOSTO  </span>  node v20.19.0                      G3
    <span class="g">protegido</span>  node v20.19.0                      AAA
 -- resumo meuservidor: 3 EXPOSTO · 0 SEM TESTE</pre>
-    <p>Trecho de exemplo (a saída real tem mais linhas). G3 e AAA são os dois "caminhos de confiança" testados: cada certificado de site é assinado por um intermediário, que é assinado por uma raiz que o seu programa confia.</p>
+    <p>Trecho de exemplo (a saída real tem mais linhas; o script escreve em português). G3 e AAA são os dois "caminhos de confiança" testados: cada certificado de site é assinado por um intermediário, que é assinado por uma raiz que o seu programa confia.</p>
     <ul>
       <li><b>EXPOSTO</b>: conectou. Corrija essa camada (seção <a href="#atualizar">Atualizar</a>).</li>
       <li><b>protegido</b>: recusou por erro de certificado.</li>
@@ -292,8 +295,8 @@ ca-certificates 20260816ubuntu0.24.04.1
 
   <div class="tabwrap"><table class="tab">
     <tr><th>Camada</th><th>Versão corrigida</th><th>Onde a lista mora</th></tr>
-    <tr><td>Ubuntu</td><td><code>ca-certificates 20260816ubuntu0.&lt;versão&gt;</code></td><td>sistema</td></tr>
-    <tr><td>Debian</td><td><code>20250419~deb12u2</code> (12) · <code>+deb13u1</code> (13)</td><td>sistema</td></tr>
+    <tr><td>Ubuntu</td><td><code>20260816ubuntu0.&lt;versão do Ubuntu&gt;</code> (ex.: <code>20260816ubuntu0.24.04.1</code>)</td><td>sistema</td></tr>
+    <tr><td>Debian</td><td><code>20250419~deb12u2</code> (Debian 12) · <code>20250419+deb13u1</code> (Debian 13)</td><td>sistema</td></tr>
     <tr><td>Alpine</td><td><code>ca-certificates 20261020-r0</code></td><td>sistema / containers</td></tr>
     <tr><td>Python</td><td><code>certifi 2026.10.19</code> · <code>pip 26.2.2</code> · <code>uv 0.13.4</code></td><td>em cada venv</td></tr>
     <tr><td>Node</td><td><code>22.23.4</code> · <code>24.22.1</code> · <code>26.12.1</code> (Node 20: sem correção)</td><td>dentro do binário</td></tr>
@@ -345,7 +348,7 @@ ca-certificates 20260816ubuntu0.24.04.1
 <span class="k">node -v</span></pre>
     <p><b>Paliativo para quem não consegue trocar hoje</b> (testado por nós): mandar o Node usar a lista do sistema já atualizada. Só funciona se o <code>ca-certificates</code> estiver corrigido. <code>--use-system-ca</code> <b>não</b> serve: ele soma as duas listas e continuou EXPOSTO no nosso teste.</p>
 <pre><span class="k">export NODE_OPTIONS=--use-openssl-ca</span>   <span class="c"># no serviço/ambiente do app; depois reinicie</span></pre>
-    <p><code>NODE_OPTIONS</code> é a variável de ambiente que passa opções para todo Node iniciado ali (no systemd: <code>Environment=NODE_OPTIONS=--use-openssl-ca</code>; no Docker: <code>environment:</code> do compose).</p>
+    <p>Node baixado do nvm ou do nodejs.org pode não achar a lista do sistema sozinho: se o teste der erro em tudo, acrescente <code>SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt</code> e confirme com o <code>audita.sh</code>. <code>NODE_OPTIONS</code> é a variável de ambiente que passa opções para todo Node iniciado ali (no systemd: <code>Environment=NODE_OPTIONS=--use-openssl-ca</code>; no Docker: <code>environment:</code> do compose).</p>
     <p>Procure também Node <b>embutido</b>: o Playwright, agentes de IA e apps trazem um Node próprio. O <code>audita.sh</code> acha esses binários no disco; atualize a ferramenta que os trouxe.</p>
   </div></div>
 
@@ -379,6 +382,7 @@ ca-certificates 20260816ubuntu0.24.04.1
 <span class="c"># 3) atualize</span>
 <span class="k">docker compose pull n8n && docker compose up -d n8n</span></pre>
     <div class="nota"><b>Armadilha do docker-compose antigo (1.29):</b> ao subir a imagem nova ele pode falhar com <code>KeyError: 'ContainerConfig'</code> e deixar o n8n parado. Remova o container antigo antes (os dados ficam no volume): <code>docker-compose rm -f -s n8n && docker-compose up -d n8n</code>. Melhor ainda: migre para o <code>docker compose</code> v2.</div>
+    <p>Outros jeitos de guardar os dados: se o n8n usa uma pasta montada (ex.: <code>./n8n_data</code> ou <code>~/.n8n</code>), copie a pasta com ele parado; se usa Postgres, faça o <code>pg_dump</code> do banco. Em todos os casos guarde junto a chave de criptografia (<code>N8N_ENCRYPTION_KEY</code> ou o arquivo <code>config</code> da pasta do n8n): sem ela as credenciais salvas não voltam.</p>
     <p>Depois de atualizar, olhe o log (<code>docker compose logs n8n</code>). Saltos grandes de versão podem trazer avisos novos, como o do executor de Python do nó Code.</p>
   </div></div>
 
@@ -449,7 +453,7 @@ ca-certificates 20260816ubuntu0.24.04.1
 
   <div class="step" style="margin-top:34px"><div class="b">1</div><div>
     <h3>Teste: o verificador da OpenAI</h3>
-    <p>A OpenAI publicou o <a href="https://github.com/openai/php2shell-checker" target="_blank" rel="noopener">php2shell-checker</a> (licença Apache 2.0). Ele lê a versão que o site anuncia nos cabeçalhos; não manda ataque.</p>
+    <p>A OpenAI publicou o <a href="https://github.com/openai/php2shell-checker" target="_blank" rel="noopener">php2shell-checker</a> (licença Apache 2.0). Ele lê a versão que o site anuncia nos cabeçalhos; não manda ataque. Precisa de <code>git</code> e Node instalados no seu computador (não no servidor).</p>
 <pre><span class="k">git clone https://github.com/openai/php2shell-checker && cd php2shell-checker</span>
 <span class="k">node phpcheck.js</span> <span class="s">"https://seusite.com.br"</span>
 <span class="c"># OK (0) · POTENTIALLY VULNERABLE (1) · UNKNOWN (3)</span></pre>
@@ -472,7 +476,7 @@ ca-certificates 20260816ubuntu0.24.04.1
     </ul>
 <pre><span class="k">sudo apt update</span>
 <span class="k">apt list --upgradable 2>/dev/null | grep -i php</span>   <span class="c"># veja o que vai mudar</span>
-<span class="k">sudo apt install --only-upgrade 'php*'</span>
+<span class="k">sudo apt install --only-upgrade $(dpkg -l 'php*' | awk '/^ii/{print $2}')</span>   <span class="c"># só os pacotes PHP instalados</span>
 <span class="k">sudo systemctl restart php8.3-fpm</span>    <span class="c"># ou apache2, se usa mod_php</span></pre>
     <p>Usa o repositório PPA <code>ondrej/php</code> (comum para ter várias versões)? Ele também precisa estar com a versão corrigida; confira com <code>php -v</code> depois. <b>mod_php</b> é o PHP rodando dentro do Apache; <b>PHP-FPM</b> é o PHP como serviço separado, usado com nginx ou Apache.</p>
   </div></div>
@@ -504,7 +508,7 @@ php_admin_flag[fatal_error_backtraces] = off</pre>
 <span class="k">crontab -l; sudo crontab -l -u www-data; ls -la /etc/cron.*</span>
 <span class="c"># acessos recentes e usuários novos</span>
 <span class="k">last -20; tail -5 /etc/passwd</span>
-<span class="k">wp user list --role=administrator</span>   <span class="c"># WP-CLI, a ferramenta de linha de comando do WordPress</span></pre>
+<span class="k">wp user list --role=administrator --path=/var/www/seusite</span>   <span class="c"># WP-CLI; como root, acrescente --allow-root</span></pre>
     <p>Achou algo que você não criou: tire o site do ar, troque senhas e chaves, restaure de um backup anterior à invasão.</p>
   </div></div>
 

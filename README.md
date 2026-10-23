@@ -42,8 +42,8 @@ Saída: `0` nada exposto · `1` há EXPOSTO · `2` há teste que não rodou.
 
 | Camada | Versão |
 |---|---|
-| Ubuntu | `ca-certificates 20260816ubuntu0.<versão>` |
-| Debian | `20250419~deb12u2` · `+deb13u1` |
+| Ubuntu | `20260816ubuntu0.<versão do Ubuntu>` (ex.: `20260816ubuntu0.24.04.1`) |
+| Debian | `20250419~deb12u2` (12) · `20250419+deb13u1` (13) |
 | Alpine | `20261020-r0` |
 | Python | `certifi 2026.10.19` · `pip 26.2.2` · `uv 0.13.4` |
 | Node | `22.23.4` · `24.22.1` · `26.12.1` (Node 20 sem correção) |
